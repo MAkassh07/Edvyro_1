@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — SecureAuth{% endblock %}
+
+{% block content %}
+  <section class="auth-wrapper">
+    <div class="card card-narrow">
+      <div class="card-header">
+        <h1 class="page-title">Sign In</h1>
+        <p class="muted-text">Authenticate with your registered email and password.</p>
+      </div>
+
+      {% if error %}
+        <div class="alert alert-error" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('main.login') }}" class="auth-form" data-loading-form novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+        <div class="form-group">
+          <label for="email" class="form-label">Email address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value="{{ email or '' }}"
+            required
+            maxlength="254"
+            autocomplete="email"
+            placeholder="student@example.com"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Password</label>
+          <div class="password-field">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              maxlength="128"
+              autocomplete="current-password"
+              class="form-input"
+            />
+            <button
+              type="button"
+              class="toggle-visibility"
+              data-toggle-password="password"
+              aria-label="Show password"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" data-submit-btn>
+          Sign In
+        </button>
+      </form>
+
+      <p class="card-footer-link">
+        Need an account? <a href="{{ url_for('main.register') }}">Create one</a>
+      </p>
+    </div>
+  </section>
+{% endblock %}

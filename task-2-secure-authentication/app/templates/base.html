@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}SecureAuth — Authentication Lab{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="{{ url_for('main.index') }}" class="brand">SecureAuth</a>
+        <nav class="nav-links" aria-label="Primary navigation">
+          <a href="{{ url_for('main.index') }}" class="nav-link">Home</a>
+          {% if session.get('user_id') %}
+            <a href="{{ url_for('main.dashboard') }}" class="nav-link">Dashboard</a>
+            <form method="post" action="{{ url_for('main.logout') }}" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn btn-secondary btn-sm">Sign Out</button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('main.login') }}" class="nav-link">Sign In</a>
+            <a href="{{ url_for('main.register') }}" class="btn btn-primary btn-sm">Create Account</a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+
+    <main class="container main-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack" aria-live="polite">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}" role="status">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <span>SecureAuth · Task 2 Cybersecurity Authentication Lab</span>
+        <span>Defensive educational application · Flask + SQLite</span>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — SecureAuth{% endblock %}
+
+{% block content %}
+  <section class="dashboard-stack">
+    <div class="card dashboard-header-card">
+      <div>
+        <p class="eyebrow">Authenticated Session</p>
+        <h1 class="page-title">Welcome to Your Dashboard</h1>
+        <p class="muted-text">
+          Signed in as <strong>{{ user.email }}</strong>
+        </p>
+      </div>
+
+      <form method="post" action="{{ url_for('main.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-secondary">Sign Out</button>
+      </form>
+    </div>
+
+    <div class="overview-grid">
+      <article class="info-card">
+        <h2>Account Profile</h2>
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>Email Address</dt>
+            <dd>{{ user.email }}</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Account Created</dt>
+            <dd class="mono">{{ user.created_at }}</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Account ID</dt>
+            <dd class="mono">#{{ user.id }}</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="info-card">
+        <h2>Active Session Protections</h2>
+        <dl class="detail-list">
+          <div class="detail-row">
+            <dt>Inactivity Timeout</dt>
+            <dd>{{ timeout_minutes }} minutes</dd>
+          </div>
+          <div class="detail-row">
+            <dt>Cookie Protection</dt>
+            <dd>HttpOnly · SameSite=Lax</dd>
+          </div>
+          <div class="detail-row">
+            <dt>CSRF Defense</dt>
+            <dd>Enabled on state-changing forms</dd>
+          </div>
+        </dl>
+      </article>
+    </div>
+  </section>
+{% endblock %}

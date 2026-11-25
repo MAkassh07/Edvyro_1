@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Register — SecureAuth{% endblock %}
+
+{% block content %}
+  <section class="auth-wrapper">
+    <div class="card card-narrow">
+      <div class="card-header">
+        <h1 class="page-title">Create Account</h1>
+        <p class="muted-text">Register a new SecureAuth account with a strong password.</p>
+      </div>
+
+      {% if errors %}
+        <div class="alert alert-error" role="alert">
+          <strong>Registration could not be completed:</strong>
+          <ul class="error-list">
+            {% for err in errors %}
+              <li>{{ err }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('main.register') }}" class="auth-form" data-loading-form novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+        <div class="form-group">
+          <label for="email" class="form-label">Email address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value="{{ email or '' }}"
+            required
+            maxlength="254"
+            autocomplete="email"
+            placeholder="student@example.com"
+            class="form-input"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password" class="form-label">Password</label>
+          <div class="password-field">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              minlength="12"
+              maxlength="128"
+              autocomplete="new-password"
+              class="form-input"
+              aria-describedby="password-policy"
+            />
+            <button
+              type="button"
+              class="toggle-visibility"
+              data-toggle-password="password"
+              aria-label="Show password"
+            >
+              Show
+            </button>
+          </div>
+          <div id="password-policy" class="policy-box">
+            <p class="policy-title">Password requirements (enforced on server):</p>
+            <ul class="policy-list">
+              <li data-rule="length">12 to 128 characters</li>
+              <li data-rule="upper">At least one uppercase letter (A-Z)</li>
+              <li data-rule="lower">At least one lowercase letter (a-z)</li>
+              <li data-rule="digit">At least one number (0-9)</li>
+              <li data-rule="special">At least one special character (!@#$%^&amp;*)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirm_password" class="form-label">Confirm password</label>
+          <div class="password-field">
+            <input
+              type="password"
+              id="confirm_password"
+              name="confirm_password"
+              required
+              minlength="12"
+              maxlength="128"
+              autocomplete="new-password"
+              class="form-input"
+            />
+            <button
+              type="button"
+              class="toggle-visibility"
+              data-toggle-password="confirm_password"
+              aria-label="Show confirm password"
+            >
+              Show
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" data-submit-btn>
+          Create Account
+        </button>
+      </form>
+
+      <p class="card-footer-link">
+        Already have an account? <a href="{{ url_for('main.login') }}">Sign in</a>
+      </p>
+    </div>
+  </section>
+{% endblock %}

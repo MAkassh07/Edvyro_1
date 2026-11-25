@@ -1,0 +1,27 @@
+# Secrets and local environment files
+.env
+.env.local
+.env.*.local
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python caches and bytecode
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test and coverage output
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local application databases and instance data
+instance/
+*.db
+*.sqlite
+*.sqlite3
