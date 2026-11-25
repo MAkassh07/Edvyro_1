@@ -45,3 +45,13 @@ From `task-2-secure-authentication/`, run:
 ```powershell
 pytest -v
 ```
+
+## Task 3: Security Log Investigation
+
+Task 3 investigates authentication logs through normalization, baseline analysis, deterministic detection rules, incident timeline reconstruction, and evidence-based response recommendations.
+
+- [Task 3 project guide](task-3-security-log-investigation/README.md)
+- [Incident report](task-3-security-log-investigation/reports/incident_report.pdf)
+- [Investigation notebook](task-3-security-log-investigation/notebooks/security_log_investigation.ipynb)
+
+**Technologies and methods:** Python, Pandas, Matplotlib, Jupyter, pytest, authentication log analysis, password-spraying and brute-force detection, and incident response.

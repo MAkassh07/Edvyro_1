@@ -1,0 +1,19 @@
+=== SECURITY LOG INVESTIGATION OUTPUT ===
+Dataset: /app/applet/interntask2/task-3-security-log-investigation/data/authentication-log-sample.csv
+Columns: ['timestamp', 'user_id', 'source_ip', 'event', 'result', 'device']
+Total input records: 12
+Valid records: 12
+Duplicate records: 0
+Invalid timestamps: 0
+Invalid IPs: 0
+Password login attempts: 9 (success=2, failure=7)
+Security control events: 2 | Session refresh events: 1
+Unique accounts: 6 | Unique IPs: 4
+Detections triggered: 3
+
+[DET-01] Brute-Force Attack | IP=198.51.100.27 | Accounts=stu-117 | Failures=3 | Successes=0 | Severity=Medium | Evidence=EV-02, EV-03, EV-04, EV-05
+[DET-02] Password Spraying | IP=203.0.113.42 | Accounts=stu-209, stu-311, stu-415, stu-502 | Failures=4 | Successes=0 | Severity=High | Evidence=EV-06, EV-07, EV-08, EV-09, EV-10
+[DET-03] Unusual Access | IP=192.0.2.99 | Accounts=stu-311 | Failures=1 | Successes=1 | Severity=Medium | Evidence=EV-07, EV-12
+
+Overall Incident Severity: High
+PDF Report Written: /app/applet/interntask2/task-3-security-log-investigation/reports/incident_report.pdf
