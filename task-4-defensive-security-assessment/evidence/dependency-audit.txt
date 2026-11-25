@@ -1,0 +1,79 @@
+================================================================================
+TASK 4 — DEPENDENCY & STATIC CODE AUDIT EVIDENCE (BASELINE + REMEDIATED)
+Target: task-2-secure-authentication/requirements.txt & app/
+Date (UTC): 2026-11-25T16:32:10Z
+================================================================================
+
+1. BASELINE DEPENDENCY AUDIT (pip-audit 2.10.1 against baseline requirements.txt)
+--------------------------------------------------------------------------------
+Baseline Pinned Manifest:
+  Flask==3.1.0
+  Werkzeug==3.1.3
+  Flask-Limiter==3.10.1
+  Flask-WTF==1.2.2
+  python-dotenv==1.0.1
+  pytest==8.3.5
+
+Command:
+  pip-audit -r task-2-secure-authentication/requirements.txt --no-deps
+
+Observed Unique Advisories (8 distinct advisories across 4 packages; 0 in Flask-Limiter / Flask-WTF):
+1) flask==3.1.0
+   - PYSEC-2026-1377 (GHSA-4grg-w6v8-c28g / CVE-2025-47278) -> Fix: 3.1.1
+     Summary: Fallback key configuration used last fallback key instead of current signing key.
+     Applicability: Low in baseline SecureAuth (SECRET_KEY_FALLBACKS not used), patch recommended.
+   - PYSEC-2026-2151 (GHSA-68rp-wp8r-4726 / CVE-2026-27205) -> Fix: 3.1.3
+     Summary: Missing Vary: Cookie header when session object is accessed (proxy/cache leakage risk).
+     Applicability: Confirmed relevant to Flask cookie-session responses; patch to >=3.1.3.
+
+2) werkzeug==3.1.3
+   - PYSEC-2026-2046 (GHSA-hgf8-39gv-g3f2 / CVE-2025-66221) -> Fix: 3.1.4
+   - PYSEC-2026-2044 (GHSA-87hc-h4r5-73f7 / CVE-2026-21860) -> Fix: 3.1.5
+   - PYSEC-2026-2320 (GHSA-29vq-49wr-vm6x / CVE-2026-27199) -> Fix: 3.1.6
+   - PYSEC-2026-4312 (GHSA-g6x2-hccm-hh4m / CVE-2026-102598) -> Fix: 3.1.9
+     Summary: Werkzeug safe_join() Windows NTFS special device-name handling issues via send_from_directory.
+     Applicability: Relevant when running locally on Windows (Flask serves static/ via send_from_directory); patch to >=3.1.9.
+
+3) python-dotenv==1.0.1
+   - PYSEC-2026-2270 (GHSA-mf9w-mj56-hr94 / CVE-2026-28684) -> Fix: 1.2.2
+     Summary: set_key() / unset_key() follow symlinks during cross-device rewrite.
+     Applicability: Not invoked by SecureAuth (app only calls load_dotenv()), upgrade to 1.2.2 to clear advisory.
+
+4) pytest==8.3.5 (Test/Dev-Only Dependency)
+   - PYSEC-2026-1845 (GHSA-6w46-j5rx-g56g / CVE-2025-71176) -> Fix: 9.0.3
+     Summary: UNIX /tmp/pytest-of-{user} directory naming issue (test runner only, not shipped in Flask runtime).
+     Applicability: Test-environment only; upgrade to >=9.0.3 to clear advisory.
+
+2. BASELINE STATIC SECURITY SCAN (bandit 1.9.4)
+--------------------------------------------------------------------------------
+Command:
+  bandit -r task-2-secure-authentication/app task-2-secure-authentication/run.py -f txt
+
+Result Summary:
+  Code scanned: 528 lines | Files skipped: 0
+  High: 0 | Medium: 0 | Low: 1 (Confidence: Medium)
+  - [B105:hardcoded_password_string] app/config.py:61:17
+    TestingConfig.SECRET_KEY = "test-only-ephemeral-signing-key-not-for-production"
+    Classification: Informational / False Positive (explicit non-production test key).
+
+3. POST-REMEDIATION RETEST (2026-11-25T16:34:40Z)
+--------------------------------------------------------------------------------
+Patched Pinned Manifest (task-2-secure-authentication/requirements.txt):
+  Flask==3.1.3
+  Werkzeug==3.1.9
+  Flask-Limiter==3.10.1
+  Flask-WTF==1.2.2
+  python-dotenv==1.2.2
+  pytest==9.0.3
+
+Command 1:
+  pip-audit -r task-2-secure-authentication/requirements.txt --no-deps
+Result:
+  No known vulnerabilities found (PIP_AUDIT_EXIT=0)
+
+Command 2:
+  bandit -r task-2-secure-authentication/app task-2-secure-authentication/run.py -f txt
+Result:
+  Code scanned: 648 lines | Files skipped: 0
+  Test results: No issues identified. (BANDIT_EXIT=0)
+

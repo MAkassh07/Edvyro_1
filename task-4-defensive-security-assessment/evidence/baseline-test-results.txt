@@ -1,0 +1,72 @@
+================================================================================
+TASK 4 — BASELINE TEST & ASSESSMENT EXECUTION LOG (PRE-REMEDIATION)
+Target: task-2-secure-authentication/ (SecureAuth)
+Date (UTC): 2026-11-25T16:30:32Z
+Python: 3.11.2 | pytest: 8.3.5 | Environment: Isolated /tmp/task4-venv
+================================================================================
+
+1. COMMAND: pytest -v (Task 2 Existing Automated Security Suite)
+--------------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.11.2, pytest-8.3.5, pluggy-1.7.0 -- /tmp/task4-venv/bin/python3
+rootdir: /app/applet/interntask2/task-2-secure-authentication
+configfile: pytest.ini
+collected 22 items
+
+tests/test_login.py::test_successful_login PASSED                        [  4%]
+tests/test_login.py::test_failed_login_incorrect_password PASSED         [  9%]
+tests/test_login.py::test_failed_login_nonexistent_email PASSED          [ 13%]
+tests/test_login.py::test_generic_error_message_prevents_enumeration PASSED [ 18%]
+tests/test_rate_limiting.py::test_login_rate_limiting_returns_429 PASSED [ 22%]
+tests/test_rate_limiting.py::test_registration_rate_limiting_returns_429 PASSED [ 27%]
+tests/test_registration.py::test_successful_registration PASSED          [ 31%]
+tests/test_registration.py::test_duplicate_email_rejection PASSED        [ 36%]
+tests/test_registration.py::test_invalid_email_rejection PASSED          [ 40%]
+tests/test_registration.py::test_weak_password_rejection PASSED          [ 45%]
+tests/test_registration.py::test_password_confirmation_mismatch PASSED   [ 50%]
+tests/test_registration.py::test_database_stores_password_hash_not_plaintext PASSED [ 54%]
+tests/test_security.py::test_csrf_protection_blocks_missing_token PASSED [ 59%]
+tests/test_security.py::test_password_hashes_not_exposed_in_responses PASSED [ 63%]
+tests/test_security.py::test_production_cookie_configuration PASSED      [ 68%]
+tests/test_security.py::test_malformed_input_does_not_crash_app PASSED   [ 72%]
+tests/test_security.py::test_security_headers_are_present PASSED         [ 77%]
+tests/test_sessions.py::test_dashboard_inaccessible_without_authentication PASSED [ 81%]
+tests/test_sessions.py::test_dashboard_accessible_after_login PASSED     [ 86%]
+tests/test_sessions.py::test_logout_clears_authentication_session PASSED [ 90%]
+tests/test_sessions.py::test_dashboard_inaccessible_after_logout PASSED  [ 95%]
+tests/test_sessions.py::test_session_expiration_prevents_access PASSED   [100%]
+
+============================== 22 passed in 8.37s ==============================
+
+2. COMMAND: python src/security_assessment.py --mode baseline
+--------------------------------------------------------------------------------
+=== SecureAuth Defensive Security Assessment (BASELINE) ===
+Timestamp (UTC): 2026-11-25T16:30:32Z
+Checks Passed:   4 / 9
+
+[FAIL] CHK-01 (A. Configuration): .env values applied to Flask app.config
+       Evidence: secret_matched=False, SESSION_COOKIE_SECURE=False, SESSION_LIFETIME_MINUTES=15
+[PASS] CHK-02 (A. Configuration): Debug disabled and cookie security attributes enforced
+       Evidence: DEBUG=False, HttpOnly=True, SameSite=Lax, ProdSecure=True
+[PASS] CHK-03 (A. Configuration): Defensive HTTP security headers present
+       Evidence: CSP=True, X-Frame-Options=DENY, X-Content-Type-Options=nosniff
+[PASS] CHK-04 (B. Authentication): Salted scrypt hashing and generic login errors
+       Evidence: hash_prefix=scrypt, wrong_pw_status=401, unknown_email_status=401
+[PASS] CHK-05 (B. Authentication): CSRF enforcement on state-changing POST routes
+       Evidence: POST /login without csrf_token returned HTTP 400
+[FAIL] CHK-06 (B. Authentication & Sessions): Pre-logout session cookie rejected after logout
+       Evidence: Replay of pre-logout cookie to GET /dashboard returned HTTP 200 (expected 302 redirect to /login)
+[FAIL] CHK-07 (C. Input Validation): Oversized login email/password rejected before hashing or reflection
+       Evidence: status=401, verify_password_called=1, oversized_email_reflected=True, elapsed_ms=250.6
+[FAIL] CHK-08 (E. Logging & Error Handling): Security logs omit raw email PII and neutralize CRLF log injection
+       Evidence: pii_leaked=True, crlf_injected=True, captured_lines=5
+[FAIL] CHK-09 (A. Configuration): Authentication forms disable browser/proxy caching (no-store)
+       Evidence: /login Cache-Control='', /register Cache-Control=''
+
+3. SANITIZED SECURITY LOG EXCERPTS OBSERVED DURING BASELINE RUN
+--------------------------------------------------------------------------------
+2026-11-25 16:30:30,070 INFO secureauth.security event=REGISTER_SUCCESS ip=127.0.0.1 detail=email=baseline_user@example.com
+2026-11-25 16:30:32,494 INFO secureauth.security event=REGISTER_SUCCESS ip=127.0.0.1 detail=email=pii_probe@example.com
+2026-11-25 16:30:32,768 INFO secureauth.security event=RATE_LIMIT_EXCEEDED ip=127.0.0.1
+FAKE detail=/login
+FAKE_EVENT=1
