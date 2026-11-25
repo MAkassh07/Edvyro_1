@@ -1,0 +1,37 @@
+flowchart LR
+    subgraph ClientSide["User Device Boundary"]
+        User(["Normal User"])
+        Admin(["Administrator"])
+        Browser["Web Browser"]
+        Frontend["Frontend (HTML / CSS / JavaScript)"]
+    end
+
+    subgraph Internet["Public Internet Boundary"]
+        HTTPS["HTTPS / TLS Transport"]
+    end
+
+    subgraph AppServer["Application Server Boundary (Python Flask)"]
+        Flask["Flask Backend (Routing & Business Logic)"]
+        Auth["Authentication Module"]
+        SessionMgr["Session Manager (Secure Cookies)"]
+    end
+
+    subgraph DataLayer["Database Boundary"]
+        SQLite[("SQLite Database (Users, Notes, Reset Tokens)")]
+    end
+
+    subgraph ExternalSvc["External Email Service Boundary"]
+        EmailSvc["Email Delivery Service"]
+    end
+
+    User -->|"Interacts via UI"| Browser
+    Admin -->|"Administrative actions"| Browser
+    Browser <-->|"Renders DOM & scripts"| Frontend
+    Frontend <-->|"HTTPS requests & responses"| HTTPS
+    HTTPS <-->|"Parsed HTTP payloads & Set-Cookie"| Flask
+    Flask <-->|"Credential & token checks"| Auth
+    Flask <-->|"Session issue & validation"| SessionMgr
+    Auth <-->|"Password reset trigger"| EmailSvc
+    Flask <-->|"Parameterized SQL reads/writes"| SQLite
+    Auth <-->|"User lookup & token storage"| SQLite
+    EmailSvc -->|"Reset link delivery"| User

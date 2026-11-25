@@ -1,0 +1,45 @@
+flowchart TB
+    subgraph TB1["Trust Boundary 1: User Device Boundary"]
+        NormalUser(["Normal User"])
+        AdminUser(["Administrator"])
+        WebBrowser["Web Browser"]
+        FrontendUI["Frontend (HTML / CSS / JavaScript)"]
+        NormalUser -->|"Enters forms & views notes"| WebBrowser
+        AdminUser -->|"Manages accounts & audits"| WebBrowser
+        WebBrowser <-->|"Executes client UI"| FrontendUI
+    end
+
+    subgraph TB2["Trust Boundary 2: Public Internet Boundary"]
+        TransitChannel["Untrusted Network / TLS 1.2+ Channel"]
+    end
+
+    subgraph TB3["Trust Boundary 3: Application Server Boundary"]
+        FlaskBackend["Flask Backend (Controllers & Validation)"]
+        AuthModule["Authentication Module (Login / Reset / RBAC)"]
+        SessionManager["Session Manager (HttpOnly / Secure / SameSite Cookies)"]
+
+        FlaskBackend <-->|"Verifies identity & permissions"| AuthModule
+        FlaskBackend <-->|"Validates & rotates session state"| SessionManager
+    end
+
+    subgraph TB4["Trust Boundary 4: Database Boundary"]
+        SQLiteDB[("SQLite Database (Users, Notes, Audit Logs)")]
+    end
+
+    subgraph TB5["Trust Boundary 5: External Email Service Boundary"]
+        EmailService["External Email Delivery Service (SMTP / API)"]
+    end
+
+    FrontendUI -->|"1. Registration information (email, password, profile)"| TransitChannel
+    FrontendUI -->|"2. Login credentials (email, password)"| TransitChannel
+    FrontendUI <-->|"3. Authentication tokens / session cookies"| TransitChannel
+    FrontendUI <-->|"4. Personal notes (create, read, update, delete)"| TransitChannel
+    FrontendUI -->|"5. Password reset requests (target email / reset token)"| TransitChannel
+
+    TransitChannel <-->|"Validated HTTP requests & hardened responses"| FlaskBackend
+
+    FlaskBackend <-->|"6. Database queries (parameterized SQL)"| SQLiteDB
+    AuthModule <-->|"6. Database queries (credential & token lookup)"| SQLiteDB
+
+    AuthModule -->|"7. Email notifications (one-time reset link)"| EmailService
+    EmailService -->|"7. Email notifications (delivered to inbox)"| NormalUser
