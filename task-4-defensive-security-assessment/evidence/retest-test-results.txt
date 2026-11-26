@@ -1,88 +1,61 @@
-================================================================================
-TASK 4 — POST-REMEDIATION RETEST EXECUTION LOG
+TASK 4 — INDEPENDENT FINAL RETEST EXECUTION LOG
 Target: task-2-secure-authentication/ (SecureAuth)
-Date (UTC): 2026-11-25T16:34:40Z
-Python: 3.11.2 | pytest: 9.0.3 | Flask: 3.1.3 | Werkzeug: 3.1.9
+Retest timestamp (UTC): 2026-11-26T13:13:34Z
+Platform: Windows | Python 3.14.6 | Isolated venv from Task 2 and Task 4 manifests
+Packages: Flask 3.1.3 | Werkzeug 3.1.9 | Flask-Limiter 3.10.1 | Flask-WTF 1.2.2
+           python-dotenv 1.2.2 | pytest 9.0.3 | pip-audit 2.10.1 | Bandit 1.9.4
+           ReportLab 5.1.2
 ================================================================================
 
-1. COMMAND: pytest -v (Task 2 Automated Security Suite — Post-Remediation)
---------------------------------------------------------------------------------
-============================= test session starts ==============================
-platform linux -- Python 3.11.2, pytest-9.0.3, pluggy-1.7.0 -- /tmp/task4-venv/bin/python3
-rootdir: /app/applet/interntask2/task-2-secure-authentication
-configfile: pytest.ini
-collected 22 items
+1. COMMAND:
+python -m pytest -q task-2-secure-authentication\tests task-4-defensive-security-assessment\tests -c task-2-secure-authentication\pytest.ini
 
-tests/test_login.py::test_successful_login PASSED                        [  4%]
-tests/test_login.py::test_failed_login_incorrect_password PASSED         [  9%]
-tests/test_login.py::test_failed_login_nonexistent_email PASSED          [ 13%]
-tests/test_login.py::test_generic_error_message_prevents_enumeration PASSED [ 18%]
-tests/test_rate_limiting.py::test_login_rate_limiting_returns_429 PASSED [ 22%]
-tests/test_rate_limiting.py::test_registration_rate_limiting_returns_429 PASSED [ 27%]
-tests/test_registration.py::test_successful_registration PASSED          [ 31%]
-tests/test_registration.py::test_duplicate_email_rejection PASSED        [ 36%]
-tests/test_registration.py::test_invalid_email_rejection PASSED          [ 40%]
-tests/test_registration.py::test_weak_password_rejection PASSED          [ 45%]
-tests/test_registration.py::test_password_confirmation_mismatch PASSED   [ 50%]
-tests/test_registration.py::test_database_stores_password_hash_not_plaintext PASSED [ 54%]
-tests/test_security.py::test_csrf_protection_blocks_missing_token PASSED [ 59%]
-tests/test_security.py::test_password_hashes_not_exposed_in_responses PASSED [ 63%]
-tests/test_security.py::test_production_cookie_configuration PASSED      [ 68%]
-tests/test_security.py::test_malformed_input_does_not_crash_app PASSED   [ 72%]
-tests/test_security.py::test_security_headers_are_present PASSED         [ 77%]
-tests/test_sessions.py::test_dashboard_inaccessible_without_authentication PASSED [ 81%]
-tests/test_sessions.py::test_dashboard_accessible_after_login PASSED     [ 86%]
-tests/test_sessions.py::test_logout_clears_authentication_session PASSED [ 90%]
-tests/test_sessions.py::test_dashboard_inaccessible_after_logout PASSED  [ 95%]
-tests/test_sessions.py::test_session_expiration_prevents_access PASSED   [100%]
+OUTPUT:
+...................................................                      [100%]
+52 passed in 8.84s
+EXIT: 0
 
-============================= 22 passed in 10.19s ==============================
+This includes 44 Task 2 tests, 8 Task 4 verification tests, and the PDF generation smoke test.
 
-2. COMMAND: pytest -v (Task 4 Defensive Assessment Verification Suite)
---------------------------------------------------------------------------------
-============================= test session starts ==============================
-platform linux -- Python 3.11.2, pytest-9.0.3, pluggy-1.7.0
-collected 7 items
+2. COMMAND:
+python task-4-defensive-security-assessment\src\security_assessment.py --mode retest --json
 
-tests/test_security_assessment.py::test_dotenv_configuration_loading_passes PASSED [ 14%]
-tests/test_security_assessment.py::test_core_baseline_security_controls_pass PASSED [ 28%]
-tests/test_security_assessment.py::test_pre_logout_cookie_replay_is_blocked PASSED [ 42%]
-tests/test_security_assessment.py::test_oversized_login_payloads_rejected_before_hashing PASSED [ 57%]
-tests/test_security_assessment.py::test_security_logs_omit_pii_and_neutralize_crlf PASSED [ 71%]
-tests/test_security_assessment.py::test_auth_pages_prevent_caching PASSED [ 85%]
-tests/test_security_assessment.py::test_csrf_rejection_and_invalid_session_are_logged PASSED [100%]
+OUTPUT SUMMARY:
+Timestamp UTC: 2026-11-26T13:13:37Z
+Checks passed: 9 / 9
+CHK-01: PASS — dotenv values applied; secure cookie true; configured lifetime 25 minutes
+CHK-02: PASS — DEBUG false; HttpOnly and SameSite=Lax; production Secure true
+CHK-03: PASS — CSP, X-Frame-Options DENY, nosniff headers present
+CHK-04: PASS — scrypt hash; wrong-password and unknown-account status both 401
+CHK-05: PASS — missing CSRF token rejected with HTTP 400
+CHK-06: PASS — replay of pre-logout cookie redirected to login (HTTP 302)
+CHK-07: PASS — oversized login values rejected before verifier; email not reflected;
+           observed 2.0 ms in this run
+CHK-08: PASS — no email PII leak or forged log line
+CHK-09: PASS — login and registration responses set no-store cache directives
+EXIT: 0
 
-============================== 7 passed in 5.68s ===============================
+3. DEPENDENCY AUDITS:
+python -m pip_audit -r task-2-secure-authentication\requirements.txt --no-deps
+OUTPUT: No known vulnerabilities found
+EXIT: 0
 
-3. COMMAND: python src/security_assessment.py --mode retest
---------------------------------------------------------------------------------
-=== SecureAuth Defensive Security Assessment (RETEST) ===
-Timestamp (UTC): 2026-11-25T16:34:28Z
-Checks Passed:   9 / 9
+python -m pip_audit -r task-4-defensive-security-assessment\requirements.txt
+OUTPUT: No known vulnerabilities found
+EXIT: 0
 
-[PASS] CHK-01 (A. Configuration): .env values applied to Flask app.config
-       Evidence: secret_matched=True, SESSION_COOKIE_SECURE=True, SESSION_LIFETIME_MINUTES=25
-[PASS] CHK-02 (A. Configuration): Debug disabled and cookie security attributes enforced
-       Evidence: DEBUG=False, HttpOnly=True, SameSite=Lax, ProdSecure=True
-[PASS] CHK-03 (A. Configuration): Defensive HTTP security headers present
-       Evidence: CSP=True, X-Frame-Options=DENY, X-Content-Type-Options=nosniff
-[PASS] CHK-04 (B. Authentication): Salted scrypt hashing and generic login errors
-       Evidence: hash_prefix=scrypt, wrong_pw_status=401, unknown_email_status=401
-[PASS] CHK-05 (B. Authentication): CSRF enforcement on state-changing POST routes
-       Evidence: POST /login without csrf_token returned HTTP 400
-[PASS] CHK-06 (B. Authentication & Sessions): Pre-logout session cookie rejected after logout
-       Evidence: Replay of pre-logout cookie to GET /dashboard returned HTTP 302 (expected 302 redirect to /login)
-[PASS] CHK-07 (C. Input Validation): Oversized login email/password rejected before hashing or reflection
-       Evidence: status=401, verify_password_called=0, oversized_email_reflected=False, elapsed_ms=5.1
-[PASS] CHK-08 (E. Logging & Error Handling): Security logs omit raw email PII and neutralize CRLF log injection
-       Evidence: pii_leaked=False, crlf_injected=False, captured_lines=3
-[PASS] CHK-09 (A. Configuration): Authentication forms disable browser/proxy caching (no-store)
-       Evidence: /login Cache-Control='no-store, no-cache, must-revalidate, max-age=0', /register Cache-Control='no-store, no-cache, must-revalidate, max-age=0'
+4. STATIC ANALYSIS:
+python -m bandit -r task-2-secure-authentication\app task-2-secure-authentication\run.py -f txt
+OUTPUT: 771 lines scanned; no issues identified; 0 High, 0 Medium, 0 Low
+EXIT: 0
 
-4. DEPENDENCY & STATIC RETEST (pip-audit & bandit)
---------------------------------------------------------------------------------
-pip-audit -r task-2-secure-authentication/requirements.txt --no-deps
--> No known vulnerabilities found (exit 0)
+5. PDF REPORT VALIDATION:
+Generated reports\defensive-security-assessment-report.pdf using --generate-pdf.
+Result: Valid PDF 1.4, 4 pages, 12,636 bytes, ending with %%EOF.
+Extracted with pypdf 7.1.1: all 15 numbered sections present.
+PDF author metadata: "Defensive Security Assessment"; no repository-owner handle or email found.
+EXIT: 0
 
-bandit -r task-2-secure-authentication/app task-2-secure-authentication/run.py -f txt
--> Code scanned: 648 lines | Test results: No issues identified. (exit 0)
+The independent pre-remediation run against committed source is preserved separately in
+baseline-test-results.txt. Its baseline Task 4 failures are expected and were not presented as
+successful retest results.

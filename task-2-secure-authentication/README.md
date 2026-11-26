@@ -17,7 +17,7 @@
 - Validate and normalize all inputs on the server using parameterized SQLite queries.
 - Prevent brute-force guessing with `Flask-Limiter` rate limits (`429 Too Many Requests`).
 - Prevent account enumeration using generic login errors and constant-time dummy verification.
-- Secure cookie sessions with `HttpOnly`, `SameSite=Lax`, configurable `Secure`, session rotation, and 15-minute inactivity expiration.
+- Secure cookie sessions with `HttpOnly`, `SameSite=Lax`, configurable `Secure`, server-side revocation, and configurable idle/absolute expiration.
 - Protect all state-changing forms against CSRF using `Flask-WTF`.
 - Verify every security control with deterministic automated `pytest` tests.
 
@@ -28,8 +28,8 @@
 - **Home Page (`/`):** Project introduction, security overview, and sign-in/registration navigation.
 - **Registration (`/register`):** Email + password + confirm password form, live UX policy hints, duplicate account prevention, server-side policy enforcement, and `scrypt` hashing.
 - **Login (`/login`):** Rate-limited authentication (`5/minute`), generic error handling (`"Invalid email or password."`), and session regeneration.
-- **Protected Dashboard (`/dashboard`):** Accessible only with a valid active session; displays solely the signed-in user's email, ID, creation timestamp, and session protections (`Cache-Control: no-store`).
-- **Logout (`POST /logout`):** CSRF-protected session termination clearing all session cookies/claims and redirecting to `/login`.
+- **Protected Dashboard (`/dashboard`):** Accessible only with a valid active server-registered session; response is marked `Cache-Control: no-store`.
+- **Logout (`POST /logout`):** CSRF-protected session termination revoking the server-side record before clearing the cookie and redirecting to `/login`.
 
 ---
 
@@ -65,9 +65,9 @@ Flask Application Factory (app/__init__.py)
 ## 6. Authentication Workflow
 
 1. **Registration:** User submits `email`, `password`, and `confirm_password` with a valid `csrf_token`. The server normalizes the email, enforces the 12–128 character complexity policy, verifies uniqueness, hashes the password via Werkzeug `scrypt`, and stores `(email, password_hash, created_at)` in SQLite.
-2. **Login:** User submits credentials to `POST /login` (throttled at 5 attempts/minute/IP). If the account is missing or the password fails, the server returns HTTP `401` with `"Invalid email or password."`. On success, `session.clear()` replaces any prior session state and creates a fresh 15-minute permanent session.
+2. **Login:** User submits credentials to `POST /login` (throttled at 5 attempts/minute/IP). If the account is missing or the password fails, the server returns HTTP `401` with `"Invalid email or password."`. On success, `session.clear()` replaces prior state, creates a random nonce, and registers its hash and expiry in SQLite.
 3. **Dashboard Access:** `@login_required` verifies the active session and inactivity timestamp (`last_active_at`), redirecting unauthenticated or expired sessions back to `/login`.
-4. **Logout:** `POST /logout` validates the CSRF token, logs the event, clears the session, and redirects to `/login`.
+4. **Logout:** `POST /logout` validates the CSRF token, revokes the hashed session record, clears the cookie, and redirects to `/login`.
 
 ---
 
@@ -117,7 +117,7 @@ Both invalid passwords and non-existent emails return HTTP `401` with **`"Invali
 
 ## 12. Database Structure & Initialization
 
-SQLite table `users` in `instance/secureauth.db`:
+SQLite tables `users` and `authenticated_sessions` in `instance/secureauth.db`:
 
 | Column | Type | Constraints |
 | :--- | :--- | :--- |
@@ -174,7 +174,7 @@ Open **`http://127.0.0.1:5000`** in your browser.
 
 ## 15. Running Automated Security Tests
 
-Execute the full `pytest` suite (`22` deterministic tests covering registration, login, rate limiting, sessions, CSRF, cookie config, and malformed input):
+Execute the full `pytest` suite (`44` deterministic tests covering configuration, registration, login, rate limiting, session revocation, CSRF, logging, cache controls, and malformed input):
 
 ```powershell
 pytest -v
@@ -203,7 +203,7 @@ All test descriptions and expected outcomes are cataloged in [`docs/testing-repo
 
 - Uses in-memory `Flask-Limiter` storage by default (single-process dev only; production requires Redis).
 - Uses single-factor email/password authentication (no MFA or email verification in Task 2 scope).
-- Uses Flask client-side signed cookies rather than a server-side session revocation store.
+- Uses signed client-side cookies with a server-side hash registry for session validation and revocation; cookie claims are signed, not encrypted.
 - Local development runs over HTTP (`SESSION_COOKIE_SECURE=false`); production requires HTTPS behind a reverse proxy with `SESSION_COOKIE_SECURE=true`.
 
 ---

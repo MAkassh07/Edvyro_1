@@ -1,0 +1,91 @@
+{
+  "assessment_date_utc": "2026-11-26",
+  "baseline_source_commit": "009d1239e5b19793a84b3cfa48f1d8ccbfc94e07",
+  "environment": {
+    "os": "Windows",
+    "python": "3.14.6",
+    "flask": "3.1.3",
+    "werkzeug": "3.1.9",
+    "flask_limiter": "3.10.1",
+    "flask_wtf": "1.2.2",
+    "python_dotenv": "1.2.2",
+    "pytest": "9.0.3",
+    "pip_audit": "2.10.1",
+    "bandit": "1.9.4",
+    "reportlab": "5.1.2"
+  },
+  "baseline": {
+    "task2_tests": {
+      "passed": 22,
+      "failed": 0,
+      "seconds": 4.75,
+      "exit_code": 0
+    },
+    "task4_tests": {
+      "passed": 1,
+      "failed": 6,
+      "seconds": 2.47,
+      "exit_code": 1
+    },
+    "harness": {
+      "passed": 4,
+      "total": 9,
+      "exit_code": 0,
+      "oversized_login_ms": 110.6
+    },
+    "pip_audit": {
+      "advisory_rows": 15,
+      "unique_advisories": 8,
+      "exit_code": 1
+    },
+    "bandit": {
+      "lines": 528,
+      "findings": 1,
+      "b105": 1,
+      "exit_code": 1
+    },
+    "versions": {
+      "python": "3.14.6",
+      "flask": "3.1.0",
+      "werkzeug": "3.1.3",
+      "python_dotenv": "1.0.1",
+      "pytest": "8.3.5"
+    }
+  },
+  "retest": {
+    "status": "passed",
+    "run_timestamp_utc": "2026-11-26T13:13:37Z",
+    "task2_tests": {
+      "passed": 44,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "task4_tests": {
+      "passed": 8,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "combined_tests": {
+      "passed": 52,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "harness": {
+      "passed": 9,
+      "total": 9,
+      "exit_code": 0,
+      "oversized_login_ms": 2.0
+    },
+    "pip_audit": {
+      "advisory_rows": 0,
+      "unique_advisories": 0,
+      "exit_code": 0,
+      "scope": "Task 2 pinned manifest with --no-deps and full Task 4 requirements"
+    },
+    "bandit": {
+      "lines": 771,
+      "findings": 0,
+      "exit_code": 0
+    }
+  }
+}

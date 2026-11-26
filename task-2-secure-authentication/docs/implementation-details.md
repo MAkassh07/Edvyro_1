@@ -1,26 +1,28 @@
 # Implementation Details — SecureAuth
 
-This document describes how SecureAuth implements the defensive controls planned in Task 1 across its modular Python Flask codebase.
+This document describes how SecureAuth implements its Flask and SQLite authentication controls.
 
----
-
-## 1. Architecture & Module Responsibilities
+## 1. Architecture
 
 | File | Responsibility |
-| :--- | :--- |
-| `app/__init__.py` | Application factory (`create_app`), environment checks, security headers (`CSP`, `nosniff`, `X-Frame-Options`, `HSTS`), and safe error handlers (`400`, `403`, `404`, `413`, `429`, `500`). |
-| `app/config.py` | Environment-driven `Config`, `ProductionConfig`, and `TestingConfig` classes managing `SECRET_KEY`, cookie attributes, `MAX_CONTENT_LENGTH`, and timeout windows. |
-| `app/extensions.py` | Shared instances of `CSRFProtect` and `Limiter` initialized cleanly without circular imports. |
-| `app/models.py` | Request-scoped SQLite connection lifecycle and parameterized queries for user creation, authentication lookup, and safe public profile lookup (excluding `password_hash`). |
-| `app/security.py` | Werkzeug `scrypt` password hashing, server-side email/password validation, session creation/rotation/expiration checks, and redacted security event logging. |
-| `app/auth.py` | `register_account`, `authenticate_account` (with dummy-hash timing equalization and generic error messages), and the `@login_required` route decorator. |
-| `app/routes.py` | Blueprint endpoints (`/` home, `/register`, `/login`, `/dashboard`, `/logout`) with `POST`-only rate limiting and `Cache-Control: no-store` on protected views. |
+|---|---|
+| `app/__init__.py` | Application factory, dotenv loading, runtime configuration, HTTP security headers, and safe error handlers. |
+| `app/config.py` | Environment parsing and development, production, and testing configurations. |
+| `app/extensions.py` | Shared CSRF protection and rate-limiter instances. |
+| `app/models.py` | SQLite schema, request-scoped connections, parameterized user queries, and server-side authenticated-session records. |
+| `app/security.py` | Password hashing and verification, session lifecycle checks, input validation helpers, and sanitized security-event logging. |
+| `app/auth.py` | Registration/login logic, credential bounds, generic authentication failures, and the login-required decorator. |
+| `app/routes.py` | Home, registration, login, dashboard, and logout routes; rate limiting and no-store response headers. |
 
----
+## 2. Runtime Configuration
 
-## 2. Database Schema (`SQLite`)
+`create_app()` loads `.env` before it reads the runtime environment. `build_env_config()` validates booleans and numeric session lifetime values rather than silently accepting malformed settings. The session lifetime must be from 1 to 1440 minutes.
 
-Initialized automatically on startup via `app/models.py`:
+Production mode rejects enabled debug mode, insecure session cookies, a signing key shorter than 32 characters, and a missing signing key. The default application factory reads `FLASK_SECRET_KEY`; explicitly supplied production configuration must also provide a key. Test configuration creates a random signing key.
+
+## 3. Database Schema
+
+The application initializes its tables on startup:
 
 ```sql
 CREATE TABLE IF NOT EXISTS users (
@@ -29,28 +31,41 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS authenticated_sessions (
+    session_id_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    issued_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    revoked_at REAL
+);
 ```
 
-- **`email`**: Normalized (`strip().lower()`) before lookup and insertion, enforced unique by SQLite.
-- **`password_hash`**: Stores the full Werkzeug salted hash string (`scrypt:...`).
-- **Query isolation**: `get_public_user_by_id()` selects only `(id, email, created_at)`, ensuring `password_hash` is never passed to dashboard templates.
+User queries use SQLite placeholders. Public profile lookup selects only safe metadata and never returns `password_hash`. The session table stores the SHA-256 hash of a random nonce, not the client-side nonce itself.
 
----
+## 4. Session Lifecycle
 
-## 3. Session Lifecycle Mechanics
+1. **Login:** Existing session state is revoked/cleared. The application generates a random nonce, stores its hash with the user ID, issue time, and absolute expiry, then places the nonce and session claims in Flask's signed cookie.
+2. **Protected request:** Session claims are checked for valid types and timestamps, idle timeout, and absolute expiry. The nonce hash must match an active database record for the same user. The user record is then loaded and the idle activity time updated.
+3. **Logout or invalidation:** The matching database row is marked revoked before the client session is cleared. Copied pre-logout cookies are rejected on subsequent requests.
+4. **Cleanup:** Expired session records are removed during database initialization and session operations.
 
-1. **Login**: `create_authenticated_session()` calls `session.clear()`, sets `session.permanent = True`, and writes `user_id`, `user_email`, `session_nonce`, `issued_at`, and `last_active_at`.
-2. **Protected Request (`/dashboard`)**: `@login_required` calls `validate_active_session()`, which verifies `user_id`, confirms `(now - last_active_at) <= SESSION_TIMEOUT_SECONDS` (900 seconds by default), checks the user record exists in SQLite, and slides `last_active_at` forward.
-3. **Expiration**: If inactive beyond the timeout, `session.clear()` runs and the user is redirected to `/login` with an expiration message.
-4. **Logout**: `POST /logout` requires a valid CSRF token, logs the `LOGOUT` event, calls `session.clear()`, and redirects to `/login`.
+The absolute session lifetime is 48 times the configured inactivity timeout. The cookie remains signed, not encrypted; do not place secrets in its claims.
 
----
+## 5. Authentication and Input Controls
 
-## 4. Security Headers Applied (`@app.after_request`)
+- Passwords use Werkzeug's salted `scrypt` hashing where supported, with the configured PBKDF2 fallback.
+- Registration and login validate input on the server. Login checks type, maximum email/password length, and null bytes before database lookup or password verification.
+- Unknown accounts still trigger dummy-hash verification and return the same generic login failure as incorrect passwords.
+- SQLite queries are parameterized; rendered templates use Jinja autoescaping.
+- Flask-WTF enforces CSRF on state-changing forms. Flask-Limiter bounds login and registration attempts.
 
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';`
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- `Referrer-Policy: strict-origin-when-cross-origin`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (enabled automatically when `SESSION_COOKIE_SECURE=True`)
-- `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` on `/dashboard`
+## 6. Logging and Response Headers
+
+Security-event fields are length-bounded and ASCII control characters are collapsed to spaces. Registration success records a user ID rather than an email. Error handlers and invalid-session paths emit structured events without logging passwords or session tokens.
+
+All responses receive the configured content-security, content-type, framing, and referrer-policy headers. HTTPS production mode adds HSTS. Login, registration, and dashboard responses include `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and `Pragma: no-cache`.
+
+## 7. Deployment Notes
+
+The local `memory://` limiter is process-local and is suitable only for development or a single process. Configure a shared backend such as Redis before using multiple workers. Production deployments must terminate TLS and set a strong `FLASK_SECRET_KEY` and secure cookies.

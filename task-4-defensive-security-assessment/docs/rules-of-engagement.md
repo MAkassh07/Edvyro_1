@@ -1,7 +1,7 @@
 # Rules of Engagement — Defensive Security Assessment
 
 **Target:** `task-2-secure-authentication/` (Local Flask Application — SecureAuth)  
-**Testing Window:** 2026-11-25  
+**Testing Window:** 2026-11-25 to 2026-11-26
 **Mode:** Authorized White-Box Defensive Assessment (Localhost & Isolated Test Fixtures Only)
 
 ---

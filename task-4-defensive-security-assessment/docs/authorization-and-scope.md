@@ -1,14 +1,14 @@
 # Authorization and Scope — Defensive Security Assessment (Task 4)
 
 **Project:** Defensive Security Assessment Capstone (EdVyro Cyber Security Internship — Task 4)  
-**Repository:** [https://github.com/MAkassh07/Edvyro_1](https://github.com/MAkassh07/Edvyro_1)  
-**Assessment Date / Testing Window:** 2026-11-25 (single-day controlled localhost assessment, baseline capture, remediation, and verification retesting)
+**Repository:** Existing local portfolio checkout
+**Assessment Date / Testing Window:** 2026-11-25 to 2026-11-26 (controlled localhost baseline, remediation, and verification retesting)
 
 ---
 
 ## 1. Authorization Statement
 
-This defensive security assessment is explicitly authorized by the repository owner (`MAkassh07`) against their own local educational Flask authentication service (**SecureAuth**) developed in **Task 2** (`task-2-secure-authentication/`). All inspection, automated verification, configuration checking, dependency auditing, remediation, and retesting activities are confined strictly to local workspace source files and ephemeral in-process / `127.0.0.1` localhost test instances using synthetic test accounts.
+This defensive security assessment was authorized by the repository owner against the local educational Flask authentication service (**SecureAuth**) developed in **Task 2** (`task-2-secure-authentication/`). All inspection, automated verification, configuration checking, dependency auditing, remediation, and retesting activities are confined strictly to local workspace source files and ephemeral in-process / `127.0.0.1` localhost test instances using synthetic test accounts.
 
 ---
 
@@ -17,7 +17,7 @@ This defensive security assessment is explicitly authorized by the repository ow
 | Attribute | Value |
 | :--- | :--- |
 | **Target Application** | SecureAuth (`task-2-secure-authentication/`) |
-| **Application Stack** | Python 3.11.2, Flask 3.1.0, Werkzeug 3.1.3, Flask-Limiter 3.10.1, Flask-WTF 1.2.2, python-dotenv 1.0.1, SQLite |
+| **Baseline Application Stack** | Python 3.14.6, Flask 3.1.0, Werkzeug 3.1.3, Flask-Limiter 3.10.1, Flask-WTF 1.2.2, python-dotenv 1.0.1, pytest 8.3.5, SQLite |
 | **Execution Mode** | Localhost (`127.0.0.1:5000`) and Flask `app.test_client()` backed by isolated temporary SQLite databases |
 | **Prior Context** | Built from Threat Model & Hardening Plan in `task-1-threat-model/` |
 

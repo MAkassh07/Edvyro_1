@@ -70,3 +70,42 @@ Checks Passed:   4 / 9
 2026-11-25 16:30:32,768 INFO secureauth.security event=RATE_LIMIT_EXCEEDED ip=127.0.0.1
 FAKE detail=/login
 FAKE_EVENT=1
+
+================================================================================
+INDEPENDENTLY REPRODUCED BASELINE — COMMITTED PRE-REMEDIATION SOURCE
+Timestamp (UTC): 2026-11-25T17:20:08Z | Python 3.14.6 | Windows | isolated baseline venv
+Source: committed HEAD 009d1239e5b19793a84b3cfa48f1d8ccbfc94e07, extracted to a temporary directory
+The submitted transcript above is retained as historical evidence. Its Linux environment and
+250.6 ms timing are not measurements from this independently reproduced run.
+================================================================================
+
+COMMAND: python -m pytest -q task-2-secure-authentication
+OUTPUT: 22 passed in 4.75s
+EXIT: 0
+
+COMMAND: python -m pytest -q task-4-defensive-security-assessment
+OUTPUT: 6 failed, 1 passed in 2.47s (expected before remediation)
+EXIT: 1
+Failing checks: dotenv configuration, pre-logout replay, oversized login values,
+log PII/control-character handling, auth-page cache controls, and security-event logs.
+
+COMMAND: python task-4-defensive-security-assessment\src\security_assessment.py --mode baseline
+OUTPUT: Checks Passed: 4 / 9
+[FAIL] CHK-01: secret_matched=False, SESSION_COOKIE_SECURE=False, SESSION_LIFETIME_MINUTES=15
+[PASS] CHK-02: DEBUG=False, HttpOnly=True, SameSite=Lax, ProdSecure=True
+[PASS] CHK-03: CSP=True, X-Frame-Options=DENY, X-Content-Type-Options=nosniff
+[PASS] CHK-04: hash_prefix=scrypt, wrong_pw_status=401, unknown_email_status=401
+[PASS] CHK-05: POST /login without csrf_token returned HTTP 400
+[FAIL] CHK-06: pre-logout cookie replay returned HTTP 200 (expected 302)
+[FAIL] CHK-07: verify_password_called=1, oversized_email_reflected=True, elapsed_ms=110.6
+[FAIL] CHK-08: pii_leaked=True, crlf_injected=True, captured_lines=5
+[FAIL] CHK-09: /login and /register Cache-Control headers were empty
+EXIT: 0
+
+COMMAND: python -m pip_audit -r task-2-secure-authentication\requirements.txt --no-deps
+OUTPUT: Found 15 known vulnerabilities in 4 packages (8 unique advisory identifiers)
+EXIT: 1
+
+COMMAND: python -m bandit -r task-2-secure-authentication\app task-2-secure-authentication\run.py -f txt
+OUTPUT: 528 lines scanned; one B105 issue, severity Low, confidence Medium; no other findings
+EXIT: 1

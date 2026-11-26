@@ -1,12 +1,16 @@
-================================================================================
-TASK 4 — DEPENDENCY & STATIC CODE AUDIT EVIDENCE (BASELINE + REMEDIATED)
-Target: task-2-secure-authentication/requirements.txt & app/
-Date (UTC): 2026-11-25T16:32:10Z
+TASK 4 — DEPENDENCY AND STATIC ANALYSIS EVIDENCE
+Target: task-2-secure-authentication/requirements.txt, task-4-defensive-security-assessment/requirements.txt, and Task 2 app/
 ================================================================================
 
-1. BASELINE DEPENDENCY AUDIT (pip-audit 2.10.1 against baseline requirements.txt)
---------------------------------------------------------------------------------
-Baseline Pinned Manifest:
+1. PRE-REMEDIATION DEPENDENCY BASELINE
+Source: committed pre-remediation snapshot at 009d1239e5b19793a84b3cfa48f1d8ccbfc94e07
+Independent baseline run: 2026-11-25T17:20Z | Windows | Python 3.14.6
+Tool: pip-audit 2.10.1
+Command: python -m pip_audit -r task-2-secure-authentication\requirements.txt --no-deps
+Exit: 1
+Observed: 15 advisory rows across 4 packages, representing 8 distinct advisory identifiers.
+
+Baseline direct pins:
   Flask==3.1.0
   Werkzeug==3.1.3
   Flask-Limiter==3.10.1
@@ -14,51 +18,37 @@ Baseline Pinned Manifest:
   python-dotenv==1.0.1
   pytest==8.3.5
 
-Command:
-  pip-audit -r task-2-secure-authentication/requirements.txt --no-deps
+Distinct advisory identifiers and fixed versions reported:
+  Flask 3.1.0:
+    PYSEC-2026-1377 (CVE-2025-47278), fixed in 3.1.1
+    PYSEC-2026-2151 (CVE-2026-27205), fixed in 3.1.3
+  Werkzeug 3.1.3:
+    PYSEC-2026-2046 (CVE-2025-66221), fixed in 3.1.4
+    PYSEC-2026-2044 (CVE-2026-21860), fixed in 3.1.5
+    PYSEC-2026-2320 (CVE-2026-27199), fixed in 3.1.6
+    PYSEC-2026-4312 (CVE-2026-102598), fixed in 3.1.9
+  python-dotenv 1.0.1:
+    PYSEC-2026-2270 (CVE-2026-28684), fixed in 1.2.2
+  pytest 8.3.5 (test-only dependency):
+    PYSEC-2026-1845 (CVE-2025-71176), fixed in 9.0.3
 
-Observed Unique Advisories (8 distinct advisories across 4 packages; 0 in Flask-Limiter / Flask-WTF):
-1) flask==3.1.0
-   - PYSEC-2026-1377 (GHSA-4grg-w6v8-c28g / CVE-2025-47278) -> Fix: 3.1.1
-     Summary: Fallback key configuration used last fallback key instead of current signing key.
-     Applicability: Low in baseline SecureAuth (SECRET_KEY_FALLBACKS not used), patch recommended.
-   - PYSEC-2026-2151 (GHSA-68rp-wp8r-4726 / CVE-2026-27205) -> Fix: 3.1.3
-     Summary: Missing Vary: Cookie header when session object is accessed (proxy/cache leakage risk).
-     Applicability: Confirmed relevant to Flask cookie-session responses; patch to >=3.1.3.
+The original advisory output and baseline environment evidence are summarized in
+baseline-test-results.txt. The baseline pins and advisory set are recorded before the
+remediation dependency updates.
 
-2) werkzeug==3.1.3
-   - PYSEC-2026-2046 (GHSA-hgf8-39gv-g3f2 / CVE-2025-66221) -> Fix: 3.1.4
-   - PYSEC-2026-2044 (GHSA-87hc-h4r5-73f7 / CVE-2026-21860) -> Fix: 3.1.5
-   - PYSEC-2026-2320 (GHSA-29vq-49wr-vm6x / CVE-2026-27199) -> Fix: 3.1.6
-   - PYSEC-2026-4312 (GHSA-g6x2-hccm-hh4m / CVE-2026-102598) -> Fix: 3.1.9
-     Summary: Werkzeug safe_join() Windows NTFS special device-name handling issues via send_from_directory.
-     Applicability: Relevant when running locally on Windows (Flask serves static/ via send_from_directory); patch to >=3.1.9.
+2. PRE-REMEDIATION STATIC ANALYSIS
+Source: same committed pre-remediation snapshot
+Tool: Bandit 1.9.4
+Command: python -m bandit -r task-2-secure-authentication\app task-2-secure-authentication\run.py -f txt
+Exit: 1
+Code scanned: 528 lines
+Result: 1 Low-severity, Medium-confidence B105 finding on the literal test-only
+TestingConfig.SECRET_KEY. No Medium or High severity findings.
 
-3) python-dotenv==1.0.1
-   - PYSEC-2026-2270 (GHSA-mf9w-mj56-hr94 / CVE-2026-28684) -> Fix: 1.2.2
-     Summary: set_key() / unset_key() follow symlinks during cross-device rewrite.
-     Applicability: Not invoked by SecureAuth (app only calls load_dotenv()), upgrade to 1.2.2 to clear advisory.
+3. FINAL DEPENDENCY RETEST
+Timestamp: 2026-11-26T13:09Z | Windows | Python 3.14.6 | pip-audit 2.10.1
 
-4) pytest==8.3.5 (Test/Dev-Only Dependency)
-   - PYSEC-2026-1845 (GHSA-6w46-j5rx-g56g / CVE-2025-71176) -> Fix: 9.0.3
-     Summary: UNIX /tmp/pytest-of-{user} directory naming issue (test runner only, not shipped in Flask runtime).
-     Applicability: Test-environment only; upgrade to >=9.0.3 to clear advisory.
-
-2. BASELINE STATIC SECURITY SCAN (bandit 1.9.4)
---------------------------------------------------------------------------------
-Command:
-  bandit -r task-2-secure-authentication/app task-2-secure-authentication/run.py -f txt
-
-Result Summary:
-  Code scanned: 528 lines | Files skipped: 0
-  High: 0 | Medium: 0 | Low: 1 (Confidence: Medium)
-  - [B105:hardcoded_password_string] app/config.py:61:17
-    TestingConfig.SECRET_KEY = "test-only-ephemeral-signing-key-not-for-production"
-    Classification: Informational / False Positive (explicit non-production test key).
-
-3. POST-REMEDIATION RETEST (2026-11-25T16:34:40Z)
---------------------------------------------------------------------------------
-Patched Pinned Manifest (task-2-secure-authentication/requirements.txt):
+Updated direct pins in both Task 2 and Task 4 manifests:
   Flask==3.1.3
   Werkzeug==3.1.9
   Flask-Limiter==3.10.1
@@ -66,14 +56,26 @@ Patched Pinned Manifest (task-2-secure-authentication/requirements.txt):
   python-dotenv==1.2.2
   pytest==9.0.3
 
-Command 1:
-  pip-audit -r task-2-secure-authentication/requirements.txt --no-deps
-Result:
-  No known vulnerabilities found (PIP_AUDIT_EXIT=0)
+Command:
+python -m pip_audit -r task-2-secure-authentication\requirements.txt --no-deps
+Output: No known vulnerabilities found
+Exit: 0
 
-Command 2:
-  bandit -r task-2-secure-authentication/app task-2-secure-authentication/run.py -f txt
-Result:
-  Code scanned: 648 lines | Files skipped: 0
-  Test results: No issues identified. (BANDIT_EXIT=0)
+Command:
+python -m pip_audit -r task-4-defensive-security-assessment\requirements.txt
+Output: No known vulnerabilities found
+Exit: 0
 
+4. FINAL STATIC ANALYSIS
+Timestamp: 2026-11-26T13:09Z | Bandit 1.9.4
+Command:
+python -m bandit -r task-2-secure-authentication\app task-2-secure-authentication\run.py -f txt
+Code scanned: 771 lines
+Output: No issues identified; 0 High, 0 Medium, 0 Low
+Exit: 0
+
+5. INTERPRETATION
+The final pip-audit result applies to the dependency manifests and vulnerability feed available
+at the recorded scan time; it does not guarantee future advisories will not be published. The
+Task 2 scan uses --no-deps to assess the pinned direct requirements, while the Task 4 scan
+audits its full requirements. Bandit scope is limited to the Task 2 application and run.py.

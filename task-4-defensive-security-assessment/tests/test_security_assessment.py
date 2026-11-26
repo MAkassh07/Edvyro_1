@@ -33,7 +33,7 @@ def test_pre_logout_cookie_replay_is_blocked():
 
 
 def test_oversized_login_payloads_rejected_before_hashing():
-    """FND-04: Login rejects >128-char passwords before scrypt and avoids >254-char email reflection."""
+    """FND-04: Login rejects oversized passwords before scrypt and avoids email reflection."""
     res = sa.check_oversized_login_input_handling()
     assert res.passed, res.evidence
 
@@ -75,3 +75,11 @@ def test_csrf_rejection_and_invalid_session_are_logged(tmp_path):
     output = stream.getvalue()
     assert "event=BAD_REQUEST" in output or "event=CSRF_REJECTED" in output
     assert "event=SESSION_INVALID" in output
+
+
+def test_pdf_report_requires_successful_retest_evidence(tmp_path):
+    report_path = sa.generate_pdf_report(tmp_path / "verified-report.pdf")
+
+    content = report_path.read_bytes()
+    assert content.startswith(b"%PDF-")
+    assert content.rstrip().endswith(b"%%EOF")

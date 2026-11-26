@@ -1,76 +1,65 @@
-# Defensive Security Assessment Capstone — Task 4
+# Defensive Security Assessment — Task 4
 
-**Track:** Cyber Security · **Task:** TASK-4 · **Target:** `task-2-secure-authentication/` (SecureAuth)  
-**Assessment Date:** 2026-11-25 · **Repository:** [https://github.com/MAkassh07/Edvyro_1](https://github.com/MAkassh07/Edvyro_1)
+**Target:** SecureAuth (`task-2-secure-authentication/`)
+**Assessment date:** 2026-11-25; final retest: 2026-11-26
+**Scope:** Authorized, non-destructive local source review and verification
 
----
+## Objective and scope
 
-## 1. Project Overview
+Task 4 assesses the Task 2 Flask authentication application, records a reproducible pre-remediation baseline, documents prioritized findings, verifies targeted remediations, and produces a sanitized assessment report. Testing is restricted to local source, Flask test clients, temporary SQLite databases, and synthetic accounts. External targets and production data are out of scope.
 
-This capstone project conducts an authorized, non-destructive white-box defensive security assessment of the local Python Flask authentication application (**SecureAuth**) built in Task 2. Following formal scope and rules-of-engagement boundaries, the engagement inspects five core security domains, records baseline evidence, remediates the highest-priority confirmed findings inside Task 2, and verifies every fix via automated before-and-after retesting.
+## Deliverables
 
----
+- [Authorization and scope](docs/authorization-and-scope.md)
+- [Rules of engagement](docs/rules-of-engagement.md)
+- [Assessment methodology](docs/assessment-methodology.md)
+- [Findings register](docs/findings-register.md)
+- [Remediation notes](docs/remediation-notes.md)
+- [Baseline assessment](evidence/baseline-assessment.md)
+- [Baseline test and harness evidence](evidence/baseline-test-results.txt)
+- [Dependency and static scan evidence](evidence/dependency-audit.txt)
+- [Retest results](evidence/retest-results.md)
+- [Retest test output](evidence/retest-test-results.txt)
+- [Machine-readable verification summary](evidence/verification-summary.json)
+- [Assessment report PDF](reports/defensive-security-assessment-report.pdf)
 
-## 2. Assessment Scope & Phases
+## Areas assessed
 
-- **Phase 1 — Authorization & Scope:** [`docs/authorization-and-scope.md`](docs/authorization-and-scope.md) · [`docs/rules-of-engagement.md`](docs/rules-of-engagement.md)
-- **Phase 2 — Baseline Assessment:** [`docs/assessment-methodology.md`](docs/assessment-methodology.md) · [`evidence/baseline-assessment.md`](evidence/baseline-assessment.md) · [`evidence/baseline-test-results.txt`](evidence/baseline-test-results.txt) · [`evidence/dependency-audit.txt`](evidence/dependency-audit.txt)
-- **Phase 3 — Findings Register:** [`docs/findings-register.md`](docs/findings-register.md)
-- **Phase 4 — Remediation Notes:** [`docs/remediation-notes.md`](docs/remediation-notes.md)
-- **Phase 5 — Retesting Evidence:** [`evidence/retest-results.md`](evidence/retest-results.md) · [`evidence/retest-test-results.txt`](evidence/retest-test-results.txt)
-- **Phase 6 — Final PDF Report:** [`reports/defensive-security-assessment-report.pdf`](reports/defensive-security-assessment-report.pdf)
+Configuration and dotenv handling; authentication and session revocation; login input bounds; dependency vulnerabilities; security logging and PII; HTTP security and cache headers; baseline controls including CSRF, rate limiting, password hashing, and SQL parameterization.
 
----
+## Findings and remediation
 
-## 3. Summary of Verified Findings & Remediations
+Six actionable findings were fixed and verified. Test signing keys are generated to remove Bandit B105. The local `memory://` limiter remains an explicitly accepted single-process limitation; use a shared store such as Redis for multi-worker deployment.
 
-| ID | Finding | Severity | Post-Remediation Status |
-| :--- | :--- | :---: | :--- |
-| **FND-01** | `.env` configuration variables ignored at `Config` import time (`app/__init__.py`, `app/config.py`) | **Medium** | **Fixed (Verified)** — `build_env_config()` runs after `load_dotenv()` |
-| **FND-02** | Pre-logout `secureauth_session` cookie replayable until timeout (`app/models.py`, `app/security.py`) | **Medium** | **Fixed (Verified)** — SQLite `revoked_sessions` rejects logged-out nonces |
-| **FND-03** | Outdated dependencies (`Flask==3.1.0`, `Werkzeug==3.1.3`, `python-dotenv==1.0.1`, `pytest==8.3.5`) | **Medium** | **Fixed (Verified)** — Upgraded & verified `0` `pip-audit` advisories |
-| **FND-04** | Unbounded `/login` password/email length causes `scrypt` CPU work & reflection (`app/auth.py`, `app/routes.py`) | **Low** | **Fixed (Verified)** — Pre-hash bounds enforced (`250.6 ms` → `5.1 ms`) |
-| **FND-05** | `REGISTER_SUCCESS` logs email PII; missing CRLF sanitization & error logging (`app/security.py`, `app/__init__.py`) | **Low** | **Fixed (Verified)** — Logs `user_id` + `_sanitize_log_value()` |
-| **FND-06** | `/login` and `/register` omit `Cache-Control: no-store` (`app/routes.py`) | **Low** | **Fixed (Verified)** — `no-store` headers applied to auth forms |
-| **FND-07** | `Bandit B105` test key notice (`app/config.py`) & single-process `memory://` limiter | **Info** | **Resolved (`B105`) / Accepted (`memory://`)** |
+| Result | Baseline | Retest |
+|---|---:|---:|
+| Task 2 tests | 22 passed | 44 passed |
+| Task 4 verification tests | 1 passed, 6 failed | 8 passed |
+| Combined tests | — | 52 passed |
+| Assessment harness | 4/9 | 9/9 |
+| pip-audit | 8 unique advisories | 0 known advisories |
+| Bandit | 1 B105 finding | 0 findings |
 
----
+The independent baseline harness measured 110.6 ms for the oversized login; this is a single-run local observation, not a performance guarantee. Retest evidence confirms the verifier is not called and oversized email is not reflected. Full environment details and exit codes are in the evidence files.
 
-## 4. Verification Metrics (Before vs. After)
+## Reproduce the retest (Windows PowerShell)
 
-- **Task 2 Functional & Security Suite (`pytest`):** `22/22` passed (baseline) → **`22/22` passed** (post-remediation, no regressions)
-- **Task 4 Assessment Harness (`src/security_assessment.py`):** `4/9` passed (baseline) → **`9/9` passed** (retest)
-- **Task 4 Verification Suite (`tests/test_security_assessment.py`):** **`7/7` passed**
-- **Dependency Audit (`pip-audit`):** `8` unique advisories (baseline) → **`0` known vulnerabilities**
-- **Static Scan (`bandit`):** `1` Low `B105` warning (baseline) → **`0` issues identified**
-
----
-
-## 5. Reproducible Commands (Windows PowerShell)
-
-Run inside `task-4-defensive-security-assessment/`:
+Run from this directory:
 
 ```powershell
-# 1. Create and activate virtual environment
-python -m venv venv
-venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 
-# 2. Install Task 4 assessment + Task 2 patched dependencies
-pip install -r requirements.txt
+python src\security_assessment.py --mode retest
+pytest -q
+pytest -q ..\task-2-secure-authentication\tests -c ..\task-2-secure-authentication\pytest.ini
 
-# 3. Run the automated Task 4 assessment harness
-python src/security_assessment.py --mode retest
+python -m pip_audit -r ..\task-2-secure-authentication\requirements.txt --no-deps
+python -m pip_audit -r requirements.txt
+python -m bandit -r ..\task-2-secure-authentication\app ..\task-2-secure-authentication\run.py -f txt
 
-# 4. Run Task 4 verification tests
-pytest -v
-
-# 5. Run Task 2 full test suite to verify zero regressions
-pytest -v ..\task-2-secure-authentication\tests -c ..\task-2-secure-authentication\pytest.ini
-
-# 6. Run dependency and static security scans
-pip-audit -r ..\task-2-secure-authentication\requirements.txt --no-deps
-bandit -r ..\task-2-secure-authentication\app ..\task-2-secure-authentication\run.py
-
-# 7. Regenerate the PDF report
-python src/security_assessment.py --generate-pdf
+python src\security_assessment.py --generate-pdf
 ```
+
+The PDF generator requires the recorded verification summary and refuses to generate a report when its recorded scans/tests fail or when the live harness no longer matches the recorded result.

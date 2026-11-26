@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import subprocess
 import sys
@@ -30,7 +31,7 @@ if str(TASK2_DIR) not in sys.path:
     sys.path.insert(0, str(TASK2_DIR))
 
 CSRF_RE = re.compile(r'name="csrf_token"\s+value="([^"]+)"')
-TEST_PW = "Assess!Strong#Pass2026"
+TEST_PW = secrets.token_urlsafe(24) + "Aa1!"
 
 
 @dataclass
@@ -326,7 +327,7 @@ def check_session_replay_after_logout() -> CheckResult:
 
 
 def check_oversized_login_input_handling() -> CheckResult:
-    """FND-03: Verify /login rejects oversized passwords (>128 chars) and emails (>254 chars) safely."""
+    """FND-04: Verify /login rejects oversized passwords and emails safely."""
     with tempfile.TemporaryDirectory() as tmp:
         app = _create_isolated_app(tmp)
         client = app.test_client()
@@ -381,7 +382,7 @@ def check_oversized_login_input_handling() -> CheckResult:
 
 
 def check_logging_pii_and_injection() -> CheckResult:
-    """FND-04 & FND-05: Verify security logs omit email PII and sanitize CRLF/control characters."""
+    """FND-05: Verify security logs omit email PII and sanitize control characters."""
     with tempfile.TemporaryDirectory() as tmp:
         app = _create_isolated_app(tmp)
         client = app.test_client()
@@ -458,7 +459,7 @@ def run_assessment(mode: str) -> dict[str, Any]:
 
 
 def generate_pdf_report(output_path: Path | None = None) -> Path:
-    """Generate the 11-section defensive security assessment PDF report using ReportLab."""
+    """Generate a 15-section report from the recorded verification evidence."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import LETTER
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -475,7 +476,41 @@ def generate_pdf_report(output_path: Path | None = None) -> Path:
     pdf_path = output_path or (TASK4_DIR / "reports" / "defensive-security-assessment-report.pdf")
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
+    evidence_path = TASK4_DIR / "evidence" / "verification-summary.json"
+    verification = json.loads(evidence_path.read_text(encoding="utf-8"))
+    baseline = verification["baseline"]
+    retest = verification["retest"]
+    task2_tests = retest["task2_tests"]
+    task4_tests = retest["task4_tests"]
+    combined_tests = retest["combined_tests"]
+    harness = retest["harness"]
+    dependency_audit = retest["pip_audit"]
+    static_analysis = retest["bandit"]
+
+    if retest["status"] != "passed":
+        raise ValueError("PDF generation requires a successful recorded retest.")
+    if (
+        task2_tests["exit_code"] != 0
+        or task4_tests["exit_code"] != 0
+        or combined_tests["exit_code"] != 0
+        or combined_tests["passed"] != task2_tests["passed"] + task4_tests["passed"]
+        or combined_tests["failed"] != 0
+        or harness["exit_code"] != 0
+        or harness["passed"] != harness["total"]
+        or dependency_audit["exit_code"] != 0
+        or dependency_audit["advisory_rows"] != 0
+        or static_analysis["exit_code"] != 0
+        or static_analysis["findings"] != 0
+    ):
+        raise ValueError("Recorded retest evidence contains failures; refusing to generate the PDF.")
+
     retest_summary = run_assessment("retest")
+    if (
+        retest_summary["passed"] != harness["passed"]
+        or retest_summary["total_checks"] != harness["total"]
+        or retest_summary["failed"] != 0
+    ):
+        raise RuntimeError("Live assessment harness does not match the recorded retest evidence.")
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -576,14 +611,15 @@ def generate_pdf_report(output_path: Path | None = None) -> Path:
         topMargin=0.65 * inch,
         bottomMargin=0.7 * inch,
         title="Defensive Security Assessment Report — SecureAuth (Task 4)",
-        author="MAkassh07",
+        author="Defensive Security Assessment",
+        creator="ReportLab",
     )
 
     story: list[Any] = []
     story.append(Paragraph("Defensive Security Assessment Report", title_style))
     story.append(
         Paragraph(
-            "Target: SecureAuth (task-2-secure-authentication/) · Assessment Date: 2026-11-25 · Repository: github.com/MAkassh07/Edvyro_1",
+            f"Target: SecureAuth (task-2-secure-authentication/) · Retest: {verification['assessment_date_utc']} · Local authorized assessment",
             subtitle_style,
         )
     )
@@ -592,33 +628,53 @@ def generate_pdf_report(output_path: Path | None = None) -> Path:
     story.append(Paragraph("1. Executive Summary", h1_style))
     story.append(
         Paragraph(
-            "An authorized, non-destructive white-box defensive security assessment was conducted against the local "
-            "SecureAuth Flask + SQLite authentication application (task-2-secure-authentication/) on 2026-11-25. "
-            "At baseline, all 22 existing Task 2 pytest checks passed, confirming foundational controls including salted "
-            "scrypt hashing, parameterized SQLite queries, Flask-Limiter throttling, CSRFProtect, HttpOnly/SameSite=Lax "
-            "cookies, and security response headers.",
+            f"An authorized, non-destructive white-box assessment was conducted against the local SecureAuth Flask and "
+            f"SQLite application. The committed pre-remediation snapshot had {baseline['task2_tests']['passed']} "
+            f"Task 2 tests passing, while the targeted harness passed {baseline['harness']['passed']}/"
+            f"{baseline['harness']['total']} checks. The baseline also had "
+            f"{baseline['pip_audit']['unique_advisories']} unique dependency advisories and "
+            f"{baseline['bandit']['findings']} Bandit finding(s).",
             body_style,
         )
     )
     story.append(
         Paragraph(
-            "Expanded defensive testing, configuration probing, dependency auditing (pip-audit), and static code analysis "
-            "(bandit) revealed 6 actionable findings (3 Medium, 3 Low) and 1 Informational observation—most notably silent "
-            "ignoring of .env variables due to import-order execution, replayable pre-logout session cookies, and 8 "
-            "upstream dependency advisories. All 6 actionable findings were remediated in place without breaking existing "
-            "application behavior. Post-remediation retesting achieved 22/22 passing Task 2 tests, 7/7 passing Task 4 "
-            "verification tests, 9/9 passing defensive harness checks, 0 pip-audit advisories, and 0 bandit warnings.",
+            f"Six actionable findings and one informational item were recorded. The retest passed "
+            f"{task2_tests['passed']} Task 2 tests and {task4_tests['passed']} Task 4 tests "
+            f"({combined_tests['passed']} combined), all {harness['total']} harness checks, and reported no "
+            f"pip-audit advisories or Bandit findings. The local process-memory rate-limit backend remains an "
+            f"accepted single-process limitation.",
             body_style,
         )
     )
 
     summary_metrics = [
         ["Assessment Metric", "Baseline Result", "Post-Remediation Result"],
-        ["Task 2 Automated Suite (pytest)", "22 / 22 Passed", "22 / 22 Passed"],
-        ["Task 4 Assessment Harness (CHK-01..09)", "4 / 9 Passed (5 Failed)", f"{retest_summary['passed']} / {retest_summary['total_checks']} Passed"],
-        ["Task 4 Verification Suite (pytest)", "N/A (Baseline Capture)", "7 / 7 Passed"],
-        ["Dependency Advisories (pip-audit)", "8 Unique Advisories (4 Packages)", "0 Advisories Found"],
-        ["Static Analysis (bandit)", "1 Low Warning (B105 Test Key)", "0 Issues Identified (648 LOC)"],
+        [
+            "Task 2 pytest",
+            f"{baseline['task2_tests']['passed']} passed",
+            f"{task2_tests['passed']} passed",
+        ],
+        [
+            "Task 4 pytest",
+            f"{baseline['task4_tests']['passed']} passed, {baseline['task4_tests']['failed']} failed",
+            f"{task4_tests['passed']} passed",
+        ],
+        [
+            "Assessment harness",
+            f"{baseline['harness']['passed']} / {baseline['harness']['total']}",
+            f"{retest_summary['passed']} / {retest_summary['total_checks']}",
+        ],
+        [
+            "pip-audit advisories",
+            f"{baseline['pip_audit']['unique_advisories']} unique",
+            f"{dependency_audit['advisory_rows']} found",
+        ],
+        [
+            "Bandit findings",
+            f"{baseline['bandit']['findings']} (B105)",
+            f"{static_analysis['findings']} found",
+        ],
     ]
     story.append(make_table(summary_metrics, [2.5 * inch, 2.2 * inch, 2.3 * inch]))
     story.append(Spacer(1, 8))
@@ -635,60 +691,95 @@ def generate_pdf_report(output_path: Path | None = None) -> Path:
         )
     )
 
-    # 3. Methodology
-    story.append(Paragraph("3. Methodology", h1_style))
+    # 3. Rules of Engagement
+    story.append(Paragraph("3. Rules of Engagement", h1_style))
     story.append(
         Paragraph(
-            "The assessment covered five OWASP-aligned domains: (A) Configuration Security, (B) Authentication Security, "
-            "(C) Input Validation, (D) Dependency Security, and (E) Logging and Error Handling. Baseline findings were "
-            "logged before any Task 2 source edits, followed by targeted patches and full before-and-after verification.",
+            "Testing was restricted to local source review, isolated test clients, temporary databases, synthetic test "
+            "accounts, and read-only dependency/static scans. External targets, high-volume traffic, real credentials, "
+            "production data, destructive operations, and secret disclosure were prohibited. Any result not reproduced "
+            "from the identified source snapshot is labeled as historical or unverified.",
             body_style,
         )
     )
 
-    # 4. Tools Used
-    story.append(Paragraph("4. Tools Used", h1_style))
+    # 4. Methodology
+    story.append(Paragraph("4. Methodology", h1_style))
+    story.append(
+        Paragraph(
+            "The assessment covered five OWASP-aligned domains: (A) Configuration Security, (B) Authentication Security, "
+            "(C) Input Validation, (D) Dependency Security, and (E) Logging and Error Handling. The committed baseline "
+            "source was extracted and tested before the corrective changes; findings were then remediated and retested "
+            "against the working source with the same controlled methods.",
+            body_style,
+        )
+    )
+
+    # 4.1 Tools Used
+    story.append(Paragraph("4.1 Tools Used", h2_style))
     tools_rows = [
         ["Tool / Mechanism", "Version", "Assessment Purpose"],
         ["Manual Source Review", "N/A", "Line-by-line review of app/*.py, templates/*.html, and config lifecycle"],
-        ["pytest & Flask test_client", "8.3.5 -> 9.0.3", "Automated execution of 22 Task 2 tests + 7 Task 4 verification tests"],
-        ["security_assessment.py", "Task 4 Harness", "9 deterministic checks covering .env load, cookie replay, bounds, and logs"],
-        ["pip-audit", "2.10.1", "Read-only advisory scan against pinned requirements.txt"],
-        ["bandit", "1.9.4", "AST static security scan across app/ and run.py"],
-        ["ReportLab", "5.1.2", "Deterministic generation of this sanitized PDF assessment report"],
+        [
+            "pytest & Flask test_client",
+            f"{verification['environment']['pytest']}",
+            f"Automated execution of {task2_tests['passed']} Task 2 and {task4_tests['passed']} Task 4 tests",
+        ],
+        [
+            "security_assessment.py",
+            "Task 4 Harness",
+            f"{harness['total']} deterministic checks covering configuration, sessions, bounds, and logs",
+        ],
+        ["pip-audit", verification["environment"]["pip_audit"], "Read-only advisory scan against pinned requirements"],
+        ["Bandit", verification["environment"]["bandit"], "AST static security scan across app/ and run.py"],
+        ["ReportLab", verification["environment"]["reportlab"], "Generation of this sanitized PDF report"],
     ]
     story.append(make_table(tools_rows, [2.0 * inch, 1.3 * inch, 3.7 * inch]))
     story.append(Spacer(1, 8))
 
-    # 5. Baseline Assessment
-    story.append(Paragraph("5. Baseline Assessment", h1_style))
+    # 5. Application Architecture and Controls
+    story.append(Paragraph("5. Application Architecture and Controls", h1_style))
     story.append(
         Paragraph(
-            "At baseline (2026-11-25T16:30:32Z), SecureAuth enforced strong password hashing (scrypt), parameterized SQL "
-            "queries, CSRFProtect, rate limiting (5/min login, 5/hr register), anti-enumeration login messages, HttpOnly "
-            "and SameSite=Lax cookies, and defensive HTTP headers (CHK-02 through CHK-05 passed). Five checks failed "
-            "baseline verification (CHK-01, CHK-06, CHK-07, CHK-08, CHK-09) alongside 8 pip-audit advisories.",
+            "SecureAuth is a Flask application with SQLite persistence, Flask-WTF CSRF protection, Flask-Limiter "
+            "authentication throttling, Werkzeug password hashing, and signed session cookies. The remediated session "
+            "lifecycle additionally validates a server-side hash record with idle, absolute-expiry, and revocation "
+            "checks. Existing generic login errors, parameterized SQL, security headers, and Jinja autoescaping were "
+            "retained.",
             body_style,
         )
     )
 
-    # 6. Findings and Severity
-    story.append(Paragraph("6. Findings and Severity Register", h1_style))
+    # 6. Baseline Findings
+    story.append(Paragraph("6. Baseline Findings", h1_style))
     findings_rows = [
         ["ID", "Title & Component", "Severity", "Post-Fix Status"],
-        ["FND-01", ".env settings ignored by Config due to import ordering (app/__init__.py, app/config.py)", "Medium", "Fixed (Verified)"],
-        ["FND-02", "Pre-logout session cookie valid until timeout; no server revocation (app/models.py, security.py)", "Medium", "Fixed (Verified)"],
-        ["FND-03", "Outdated dependencies with known advisories: Flask, Werkzeug, python-dotenv, pytest", "Medium", "Fixed (Verified)"],
-        ["FND-04", "Unbounded login password/email lengths cause scrypt CPU work & HTML reflection (auth.py, routes.py)", "Low", "Fixed (Verified)"],
-        ["FND-05", "Registration log exposes email PII; missing CRLF sanitization & error-event logging (security.py)", "Low", "Fixed (Verified)"],
-        ["FND-06", "Authentication forms (/login, /register) omit Cache-Control: no-store headers (app/routes.py)", "Low", "Fixed (Verified)"],
-        ["FND-07", "Bandit B105 static warning on TestingConfig.SECRET_KEY & dev memory:// rate limiter", "Info", "Resolved / Accepted"],
+        ["FND-01", "Runtime dotenv/environment configuration ordering and validation", "Medium", "Fixed and verified"],
+        ["FND-02", "Signed session cookies lacked server-side revocation", "Medium", "Fixed and verified"],
+        ["FND-03", "Known advisories in pinned Flask, Werkzeug, dotenv, and pytest versions", "Medium", "Fixed and verified"],
+        ["FND-04", "Unbounded login inputs reached password verification and response reflection", "Low", "Fixed and verified"],
+        ["FND-05", "Registration log PII, control-character injection, and event coverage gaps", "Low", "Fixed and verified"],
+        ["FND-06", "Authentication responses lacked no-store cache directives", "Low", "Fixed and verified"],
+        ["FND-07", "Test-key B105 removed; process-local limiter limitation retained", "Info", "Informational"],
     ]
     story.append(make_table(findings_rows, [0.7 * inch, 4.1 * inch, 0.8 * inch, 1.4 * inch]))
     story.append(PageBreak())
 
-    # 7. Evidence and Reproduction Steps
-    story.append(Paragraph("7. Evidence and Sanitized Reproduction Steps", h1_style))
+    # 7. Severity Assessment
+    story.append(Paragraph("7. Severity Assessment", h1_style))
+    story.append(
+        Paragraph(
+            "Medium findings affected configuration reliability, logout revocation, or known dependency advisories. "
+            "Low findings were bounded hardening gaps involving login input work, audit logging, or response caching. "
+            "FND-07 is informational: the scanner warning was removed, while the intentionally local memory limiter "
+            "remains documented as a deployment constraint. Ratings reflect this local educational application's scope "
+            "and observed impact.",
+            body_style,
+        )
+    )
+
+    # 8. Evidence and Reproduction Steps
+    story.append(Paragraph("8. Evidence and Sanitized Reproduction Steps", h1_style))
     story.append(Paragraph("FND-01 (.env Load Ordering)", h2_style))
     story.append(
         Paragraph(
@@ -718,66 +809,129 @@ def generate_pdf_report(output_path: Path | None = None) -> Path:
     story.append(Paragraph("FND-04, FND-05, FND-06 (Bounds, Logging, Cache Headers)", h2_style))
     story.append(
         Paragraph(
-            "Evidence: Baseline CHK-07 executed verify_password() on a 50,000-char password (250.6 ms) and reflected a "
-            "312-char email in login HTML; CHK-08 logged detail=email=pii_probe@example.com and permitted newline log "
-            "injection (FAKE_EVENT=1); CHK-09 observed empty Cache-Control headers on /login and /register.",
+            f"Evidence: Baseline CHK-07 executed verify_password() on a 50,000-character password "
+            f"({baseline['harness']['oversized_login_ms']} ms in the independent run) and reflected an oversized "
+            f"email. CHK-08 observed email PII and forged log lines; CHK-09 observed empty Cache-Control headers "
+            f"on /login and /register.",
             body_style,
         )
     )
 
-    # 8. Remediation Details
-    story.append(Paragraph("8. Remediation Details", h1_style))
+    # 9. Remediation Details
+    story.append(Paragraph("9. Remediation Details", h1_style))
     story.append(
         Paragraph(
             "All targeted fixes preserved SecureAuth's Flask + SQLite architecture: (1) Added build_env_config() and safe "
-            "_parse_int() applied after load_dotenv(); (2) Added SQLite revoked_sessions table storing logged-out "
-            "session_nonce values until expiration with automatic pruning; (3) Upgraded requirements.txt to Flask==3.1.3, "
+            "_parse_int() applied after load_dotenv(); (2) Added an authenticated_sessions table storing SHA-256 hashes "
+            "of session nonces with absolute expiry and revocation timestamps; (3) Upgraded requirements.txt to Flask==3.1.3, "
             "Werkzeug==3.1.9, python-dotenv==1.2.2, and pytest==9.0.3; (4) Enforced MAX_EMAIL_LENGTH (254) and "
             "MAX_PASSWORD_LENGTH (128) in authenticate_account() before DB/scrypt work; (5) Replaced email PII in "
-            "REGISTER_SUCCESS logs with user_id, added _sanitize_log_value() CRLF stripping, and logged 400/403/413/500 "
-            "and invalid/revoked sessions; (6) Added Cache-Control: no-store across /login and /register; (7) Replaced "
-            "static TestingConfig.SECRET_KEY with secrets.token_hex(32).",
+            "REGISTER_SUCCESS logs with user_id, bounded and sanitized log fields, and added structured error/session "
+            "events; (6) Added Cache-Control: no-store across authentication and dashboard responses; (7) Replaced "
+            "static test signing keys with secrets.token_hex(32).",
             body_style,
         )
     )
 
-    # 9. Before-and-After Retesting
-    story.append(Paragraph("9. Before-and-After Retesting Results", h1_style))
+    # 10. Before-and-After Retesting
+    story.append(Paragraph("10. Before-and-After Retesting Results", h1_style))
     retest_rows = [
         ["Check / Finding", "Baseline Outcome", "Retest Outcome", "Status"],
         ["CHK-01 / FND-01", "secret_matched=False, Secure=False", "secret_matched=True, Secure=True", "PASS"],
-        ["CHK-06 / FND-02", "GET /dashboard returned HTTP 200", "GET /dashboard returned HTTP 302 + SESSION_REVOKED", "PASS"],
-        ["pip-audit / FND-03", "8 unique advisories (exit=1)", "No known vulnerabilities found (exit=0)", "PASS"],
-        ["CHK-07 / FND-04", "verify_password=1 (250.6 ms), reflected=True", "verify_password=0 (5.1 ms), reflected=False", "PASS"],
+        ["CHK-06 / FND-02", "GET /dashboard returned HTTP 200", "Replay redirected to login (HTTP 302)", "PASS"],
+        ["pip-audit / FND-03", f"{baseline['pip_audit']['unique_advisories']} unique advisories", f"{dependency_audit['advisory_rows']} advisories", "PASS"],
+        ["CHK-07 / FND-04", f"verify_password=1 ({baseline['harness']['oversized_login_ms']} ms)", f"verify_password=0 ({harness['oversized_login_ms']} ms)", "PASS"],
         ["CHK-08 / FND-05", "pii_leaked=True, crlf_injected=True", "pii_leaked=False, crlf_injected=False", "PASS"],
         ["CHK-09 / FND-06", "Cache-Control='' on /login, /register", "Cache-Control: no-store on both routes", "PASS"],
-        ["bandit / FND-07", "1 Low B105 warning (exit=1)", "No issues identified across 648 LOC (exit=0)", "PASS"],
-        ["Task 2 + Task 4 pytest", "22 / 22 Baseline Passed", "22 / 22 Task 2 + 7 / 7 Task 4 Passed", "PASS"],
+        ["Bandit / FND-07", f"{baseline['bandit']['findings']} B105 finding", f"{static_analysis['findings']} findings", "PASS"],
+        ["Task 2 + Task 4 pytest", f"{baseline['task2_tests']['passed']} Task 2 passed", f"{combined_tests['passed']} passed", "PASS"],
     ]
     story.append(make_table(retest_rows, [1.5 * inch, 2.2 * inch, 2.5 * inch, 0.8 * inch]))
     story.append(Spacer(1, 8))
 
-    # 10. Remaining Risks and Limitations
-    story.append(Paragraph("10. Remaining Risks and Limitations", h1_style))
+    # 11. Dependency Audit
+    story.append(Paragraph("11. Dependency Audit", h1_style))
     story.append(
         Paragraph(
-            "Consistent with Task 2's educational scope, several production features remain out of scope: (1) Default "
-            "RATELIMIT_STORAGE_URI=memory:// resets on restart and requires Redis for multi-worker deployments; "
-            "(2) Single-factor authentication without MFA or email verification; (3) Local development runs over HTTP "
-            "(SESSION_COOKIE_SECURE=false) until deployed behind a TLS reverse proxy; (4) Flask signed cookies remain "
-            "HMAC-signed (not encrypted), though only non-sensitive IDs, email, nonce, and timestamps are stored.",
+            f"The baseline scan emitted {baseline['pip_audit']['advisory_rows']} advisory rows "
+            f"({baseline['pip_audit']['unique_advisories']} unique identifiers). The retest scanned the pinned Task 2 "
+            f"manifest and the full Task 4 dependency set with pip-audit {verification['environment']['pip_audit']}; "
+            f"the recorded result was {dependency_audit['advisory_rows']} known advisories (exit "
+            f"{dependency_audit['exit_code']}).",
+            body_style,
+        )
+    )
+    story.append(
+        make_table(
+            [
+                ["Package", "Baseline", "Retest"],
+                ["Flask", baseline["versions"]["flask"], verification["environment"]["flask"]],
+                ["Werkzeug", baseline["versions"]["werkzeug"], verification["environment"]["werkzeug"]],
+                [
+                    "python-dotenv",
+                    baseline["versions"]["python_dotenv"],
+                    verification["environment"]["python_dotenv"],
+                ],
+                ["pytest", baseline["versions"]["pytest"], verification["environment"]["pytest"]],
+            ],
+            [2.0 * inch, 2.0 * inch, 2.0 * inch],
+        )
+    )
+
+    # 12. Static Analysis
+    story.append(Paragraph("12. Static Analysis", h1_style))
+    story.append(
+        Paragraph(
+            f"Bandit {verification['environment']['bandit']} scanned the Task 2 application and run entry point. "
+            f"The baseline contained {baseline['bandit']['findings']} B105 finding across "
+            f"{baseline['bandit']['lines']} lines. The retest reported {static_analysis['findings']} findings across "
+            f"{static_analysis['lines']} lines (exit {static_analysis['exit_code']}).",
+            body_style,
+        )
+    )
+    story.append(
+        make_table(
+            [
+                ["Static scan", "Baseline", "Retest"],
+                ["Bandit", f"{baseline['bandit']['findings']} B105 finding", f"{static_analysis['findings']} findings"],
+                ["Lines scanned", str(baseline["bandit"]["lines"]), str(static_analysis["lines"])],
+                ["Exit status", str(baseline["bandit"]["exit_code"]), str(static_analysis["exit_code"])],
+            ],
+            [2.0 * inch, 2.0 * inch, 2.0 * inch],
+        )
+    )
+
+    # 13. Remaining Risks
+    story.append(Paragraph("13. Remaining Risks", h1_style))
+    story.append(
+        Paragraph(
+            "The in-memory rate-limit store is process-local and resets on restart; configure a shared store such as "
+            "Redis before using multiple workers. The application does not implement MFA, email verification, or "
+            "password recovery. Local development uses HTTP; production must terminate TLS and enable secure cookies.",
             body_style,
         )
     )
 
-    # 11. Conclusion
-    story.append(Paragraph("11. Conclusion", h1_style))
+    # 14. Limitations
+    story.append(Paragraph("14. Limitations", h1_style))
     story.append(
         Paragraph(
-            "SecureAuth's defensive posture improved measurably from 4/9 baseline assessment checks and 8 package "
-            "advisories to 9/9 checks passed, 29/29 total automated pytest checks passed, 0 pip-audit advisories, and "
-            "0 bandit warnings. All fixes were verified empirically with sanitized evidence while preserving Task 2 "
-            "functionality and keeping Tasks 1 and 3 intact.",
+            "The recorded tests and scans apply to the stated source snapshot, local Windows/Python environment, and "
+            "tool versions. They do not prove absence of all vulnerabilities or guarantee that future dependency "
+            "releases will remain unaffected. The observed oversized-input timings are single-run measurements, not "
+            "performance guarantees.",
+            body_style,
+        )
+    )
+
+    # 15. Conclusion
+    story.append(Paragraph("15. Conclusion", h1_style))
+    story.append(
+        Paragraph(
+            "The seven recorded findings were addressed or explicitly dispositioned. The current evidence records "
+            f"{combined_tests['passed']} passing tests, {harness['passed']}/{harness['total']} passing harness checks, "
+            f"zero dependency advisories, and zero Bandit findings. The assessment was limited to the authorized local "
+            "application and used synthetic accounts and temporary databases.",
             body_style,
         )
     )

@@ -67,4 +67,4 @@ Task 4 conducts an authorized, non-destructive white-box assessment of the Secur
 
 **Security areas assessed:** configuration and environment handling, authentication and session revocation, input validation, dependency vulnerabilities, security logging and PII, and authentication-response caching.
 
-**Remediation and retest:** The assessment documents remediation for six prioritized findings and resolution of one informational finding. Retesting reports **22/22** Task 2 tests, **9/9** assessment checks, and **7/7** Task 4 tests passed, with **0** dependency advisories and **0** Bandit findings.
+**Remediation and retest:** Six actionable findings were fixed and verified; the informational B105 warning was removed while the single-process `memory://` limiter remains documented as an accepted limitation. Retesting reports **44** Task 2 tests and **8** Task 4 verification tests passed (**52 total**), **9/9** assessment checks passed, **0** known dependency advisories, and **0** Bandit findings.

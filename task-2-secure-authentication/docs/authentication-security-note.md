@@ -64,9 +64,9 @@ When an IP exceeds the limit, Flask-Limiter immediately returns **HTTP 429 (Too 
 
 ## 6. How Secure Cookies Protect Sessions
 
-HTTP is stateless—every request arrives independently. After a user logs in, Flask stores session claims (`user_id`, `user_email`, `session_nonce`, `issued_at`, `last_active_at`) inside a cookie signed with `SECRET_KEY` using HMAC.
+HTTP is stateless—every request arrives independently. After a user logs in, Flask stores session claims (`user_id`, `user_email`, `session_nonce`, `issued_at`, `last_active_at`) inside a cookie signed with `SECRET_KEY` using HMAC. The server stores only a SHA-256 hash of the nonce in an `authenticated_sessions` SQLite table.
 
-Because the cookie is cryptographically signed, a user cannot modify `user_id` inside their browser without invalidating the signature. Upon login, SecureAuth calls `session.clear()` before setting the new user's session data, ensuring any pre-login session state is replaced cleanly (mitigating session fixation).
+Because the cookie is cryptographically signed, a user cannot modify `user_id` inside their browser without invalidating the signature. Upon login, SecureAuth clears/revokes any existing session before setting the new user's session data, ensuring prior session state is replaced cleanly (mitigating session fixation). On each protected request, the server verifies that the nonce hash exists, belongs to that user, is not revoked, and has not expired.
 
 ---
 
@@ -84,8 +84,9 @@ Because the cookie is cryptographically signed, a user cannot modify `user_id` i
 
 If a user signs in on a shared computer or leaves a browser open, an indefinite session stays valid forever. SecureAuth sets two layers of expiration:
 
-1. **Cookie lifetime (`PERMANENT_SESSION_LIFETIME = 15 minutes`):** Tells the browser to discard the cookie after 15 minutes.
-2. **Server-verified inactivity timestamp (`last_active_at`):** Even if an attacker replays an old cookie value, `validate_active_session()` checks the elapsed time since the user's last request. After 15 minutes of inactivity, the server clears the session and forces re-authentication.
+1. **Cookie lifetime (`PERMANENT_SESSION_LIFETIME`):** Tells the browser to discard the cookie after the configured inactivity interval (15 minutes by default).
+2. **Server-verified inactivity timestamp (`last_active_at`):** `validate_active_session()` checks the elapsed time since the user's last request and forces re-authentication after the configured idle timeout.
+3. **Absolute lifetime and revocation:** The session registry applies an absolute expiry (48 times the configured idle timeout). Logout marks the server-side record revoked before clearing the cookie, so replaying a copied pre-logout cookie is rejected immediately.
 
 ---
 
@@ -114,5 +115,5 @@ To keep Task 2 beginner-friendly and focused on core authentication mechanics, s
 
 - **In-memory rate limiting:** Default `memory://` storage resets when the server restarts and does not synchronize across multiple Gunicorn workers (production requires Redis).
 - **Single-factor authentication:** No email verification on sign-up, password reset flow, or Multi-Factor Authentication (MFA/TOTP) is implemented yet.
-- **Client-side signed cookie sessions:** Flask's default session cookie stores signed metadata on the client; instant server-side revocation of stolen cookies (before expiry) requires server-side session storage (e.g., Redis or a `sessions` table).
+- **Signed client cookie metadata:** Flask's cookie is signed, not encrypted, so its claims are visible to the client. A server-side hash registry enables immediate revocation without storing the raw nonce; do not put secrets in session claims.
 - **No TLS termination in Flask dev server:** Local `python run.py` uses HTTP; production deployments must run behind Nginx/Caddy with HTTPS and `SESSION_COOKIE_SECURE=true`.

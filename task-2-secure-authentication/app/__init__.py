@@ -6,7 +6,7 @@ from typing import Any
 from dotenv import load_dotenv
 from flask import Flask, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
-from app.config import Config
+from app.config import Config, build_env_config
 from app.extensions import csrf, limiter
 from app.models import init_app as init_db_app
 from app.routes import main_bp
@@ -20,18 +20,24 @@ def create_app(test_config: dict[str, Any] | type[Config] | None = None) -> Flas
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(Config)
 
-    if test_config is not None:
+    if test_config is None:
+        app.config.update(build_env_config())
+    else:
         if isinstance(test_config, dict):
             app.config.update(test_config)
         else:
             app.config.from_object(test_config)
 
-    if (
-        test_config is None
-        and app.config.get("FLASK_ENV") == "production"
-        and not os.environ.get("FLASK_SECRET_KEY")
-    ):
-        raise RuntimeError("FLASK_SECRET_KEY must be set in production environments.")
+    if app.config.get("FLASK_ENV") == "production":
+        production_secret = os.environ.get("FLASK_SECRET_KEY")
+        if production_secret is not None and len(production_secret) < 32:
+            raise ValueError(
+                "FLASK_SECRET_KEY must contain at least 32 characters in production."
+            )
+        if production_secret and not app.config.get("SECRET_KEY"):
+            app.config["SECRET_KEY"] = production_secret
+        if not app.config.get("SECRET_KEY"):
+            raise RuntimeError("FLASK_SECRET_KEY must be set in production environments.")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -60,6 +66,7 @@ def create_app(test_config: dict[str, Any] | type[Config] | None = None) -> Flas
 
     @app.errorhandler(400)
     def handle_bad_request(_error):
+        log_security_event("BAD_REQUEST", request.remote_addr, f"path={request.path}")
         return (
             render_template(
                 "login.html",
@@ -71,6 +78,7 @@ def create_app(test_config: dict[str, Any] | type[Config] | None = None) -> Flas
 
     @app.errorhandler(403)
     def handle_forbidden(_error):
+        log_security_event("FORBIDDEN", request.remote_addr, f"path={request.path}")
         return (
             render_template(
                 "login.html",
@@ -93,6 +101,7 @@ def create_app(test_config: dict[str, Any] | type[Config] | None = None) -> Flas
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_payload_too_large(_error):
+        log_security_event("PAYLOAD_TOO_LARGE", request.remote_addr, f"path={request.path}")
         return (
             render_template(
                 "login.html",
@@ -116,6 +125,7 @@ def create_app(test_config: dict[str, Any] | type[Config] | None = None) -> Flas
 
     @app.errorhandler(500)
     def handle_internal_error(_error):
+        log_security_event("INTERNAL_ERROR", request.remote_addr, f"path={request.path}")
         return (
             render_template(
                 "login.html",

@@ -14,6 +14,7 @@ from flask import (
 from app.auth import authenticate_account, login_required, register_account
 from app.extensions import limiter
 from app.security import (
+    MAX_EMAIL_LENGTH,
     clear_authenticated_session,
     log_security_event,
     normalize_email,
@@ -21,6 +22,14 @@ from app.security import (
 )
 
 main_bp = Blueprint("main", __name__)
+
+
+@main_bp.after_app_request
+def prevent_sensitive_page_caching(response):
+    if request.endpoint in {"main.login", "main.register", "main.dashboard"}:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @main_bp.route("/", methods=["GET"])
@@ -43,6 +52,12 @@ def register():
 
     if request.method == "POST":
         submitted_email = normalize_email(request.form.get("email", ""))
+        display_email = (
+            submitted_email
+            if len(submitted_email) <= MAX_EMAIL_LENGTH
+            and not any(ch in submitted_email for ch in ("\r", "\n", "\x00"))
+            else ""
+        )
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
 
@@ -51,11 +66,14 @@ def register():
             flash("Account created successfully. Please sign in.", "success")
             return redirect(url_for("main.login"))
 
-        return render_template(
-            "register.html",
-            errors=errors,
-            email=submitted_email,
-        ), 400
+        return (
+            render_template(
+                "register.html",
+                errors=errors,
+                email=display_email,
+            ),
+            400,
+        )
 
     return render_template("register.html", errors=errors, email=submitted_email)
 
@@ -81,7 +99,13 @@ def login():
             return redirect(url_for("main.dashboard"))
 
         error = err_msg
-        return render_template("login.html", error=error, email=submitted_email), 401
+        safe_email = (
+            submitted_email
+            if len(submitted_email) <= MAX_EMAIL_LENGTH
+            and not any(ch in submitted_email for ch in ("\r", "\n", "\x00"))
+            else ""
+        )
+        return render_template("login.html", error=error, email=safe_email), 401
 
     return render_template("login.html", error=error, email=submitted_email)
 
@@ -98,8 +122,6 @@ def dashboard():
             timeout_minutes=timeout_minutes,
         )
     )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
     return response
 
 

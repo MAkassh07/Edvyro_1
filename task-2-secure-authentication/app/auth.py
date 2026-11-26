@@ -9,6 +9,8 @@ from app.security import (
     get_dummy_hash,
     hash_password,
     log_security_event,
+    MAX_EMAIL_LENGTH,
+    MAX_PASSWORD_LENGTH,
     normalize_email,
     validate_active_session,
     validate_email,
@@ -44,12 +46,12 @@ def register_account(
         return False, [GENERIC_REGISTER_DUPLICATE_ERROR]
 
     password_hash = hash_password(raw_password)
-    created, _user_id = create_user(normalized_email, password_hash)
+    created, user_id = create_user(normalized_email, password_hash)
     if not created:
         log_security_event("REGISTER_CONFLICT", request.remote_addr, "unique constraint conflict")
         return False, [GENERIC_REGISTER_DUPLICATE_ERROR]
 
-    log_security_event("REGISTER_SUCCESS", request.remote_addr, f"email={normalized_email}")
+    log_security_event("REGISTER_SUCCESS", request.remote_addr, f"user_id={user_id}")
     return True, []
 
 
@@ -59,7 +61,15 @@ def authenticate_account(raw_email: Any, raw_password: Any) -> tuple[bool, dict[
         return False, None, GENERIC_LOGIN_ERROR
 
     email = normalize_email(raw_email)
-    if not email or not raw_password:
+    email_valid, _email_error = validate_email(raw_email)
+    if (
+        not email_valid
+        or len(email) > MAX_EMAIL_LENGTH
+        or not raw_password
+        or len(raw_password) > MAX_PASSWORD_LENGTH
+        or "\x00" in raw_password
+    ):
+        log_security_event("LOGIN_FAILED", request.remote_addr, "invalid input")
         return False, None, GENERIC_LOGIN_ERROR
 
     user = get_user_for_auth(email)
@@ -91,7 +101,6 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
         is_valid, user, reason = validate_active_session()
         if not is_valid or user is None:
             if reason == "expired":
-                log_security_event("SESSION_EXPIRED", request.remote_addr, "inactivity timeout")
                 flash("Your session expired due to inactivity. Please sign in again.", "warning")
             else:
                 flash("Please sign in to access your dashboard.", "warning")

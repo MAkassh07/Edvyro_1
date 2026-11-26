@@ -1,25 +1,38 @@
-# Before-and-After Retesting Comparison — Task 4
+# Retest Results — SecureAuth
 
-**Retest Date (UTC):** 2026-11-25T16:34:40Z  
-**Target:** `task-2-secure-authentication/` (SecureAuth)  
-**Overall Suite Result:** `22/22` Task 2 tests PASSED · `7/7` Task 4 assessment tests PASSED · `9/9` harness checks PASSED · `0` `pip-audit` advisories · `0` `bandit` warnings
+**Retest date (UTC):** 2026-11-26
+**Target:** `task-2-secure-authentication/`
+**Environment:** Python 3.14.6; isolated retest virtual environment; Windows
+**Detailed sanitized run record:** `retest-test-results.txt`
 
----
+## Result summary
 
-## 1. Before-and-After Finding Verification Matrix
+| Verification | Baseline | Retest | Result |
+|---|---:|---:|---|
+| Task 2 pytest suite | 22 passed | 44 passed | Pass |
+| Task 4 pytest suite | 1 passed, 6 failed | 8 passed | Pass |
+| Combined pytest suites | Not run together | 52 passed in 8.84s | Pass |
+| Assessment harness | 4/9 | 9/9 at 2026-11-26T13:13:37Z | Pass |
+| pip-audit | 8 unique advisories in 15 rows | 0 known advisories | Pass |
+| Bandit | 1 B105 finding | 0 findings | Pass |
 
-| Finding | Original Test Result | Remediation Performed | Retest Procedure | Actual Retest Result | Status |
-| :--- | :--- | :--- | :--- | :--- | :---: |
-| **FND-01:** `.env` ignored at `Config` import time | `[FAIL] CHK-01`: `secret_matched=False`, `SESSION_COOKIE_SECURE=False`, `SESSION_LIFETIME_MINUTES=15` | Added `build_env_config()` and `_parse_int()` in `app/config.py`; applied in `create_app()` after `load_dotenv()`. | Run `CHK-01` & `test_dotenv_configuration_loading_passes` in clean `.env` subprocess. | `[PASS] CHK-01`: `secret_matched=True`, `SESSION_COOKIE_SECURE=True`, `SESSION_LIFETIME_MINUTES=25` | **Pass (Fixed)** |
-| **FND-02:** Pre-logout session cookie replayable until timeout | `[FAIL] CHK-06`: Replay of pre-logout cookie to `GET /dashboard` returned HTTP `200`. | Added `revoked_sessions` table in `app/models.py`; revoked `session_nonce` on logout and checked revocation in `validate_active_session()`. | Run `CHK-06` & `test_pre_logout_cookie_replay_is_blocked` by replaying pre-logout cookie after `POST /logout`. | `[PASS] CHK-06`: Replay returned HTTP `302` redirect to `/login` and logged `SESSION_REVOKED`. | **Pass (Fixed)** |
-| **FND-03:** Outdated `Flask`, `Werkzeug`, `python-dotenv`, `pytest` advisories | `pip-audit`: 8 unique advisories across 4 packages (`exit=1`). | Updated `requirements.txt` to `Flask==3.1.3`, `Werkzeug==3.1.9`, `python-dotenv==1.2.2`, `pytest==9.0.3` and upgraded environment. | Re-run `pip-audit -r requirements.txt --no-deps`. | `No known vulnerabilities found` (`exit=0`). | **Pass (Fixed)** |
-| **FND-04:** Unbounded `/login` password/email length | `[FAIL] CHK-07`: `verify_password_called=1` (`250.6 ms`), `oversized_email_reflected=True`. | Enforced `MAX_EMAIL_LENGTH` (`254`) and `MAX_PASSWORD_LENGTH` (`128`) in `authenticate_account()` before DB/hashing; suppressed oversized reflection in `routes.py`. | Run `CHK-07` & `test_oversized_login_payloads_rejected_before_hashing` with 50 KB password & 312-char email. | `[PASS] CHK-07`: `status=401`, `verify_password_called=0`, `oversized_email_reflected=False`, `elapsed_ms=5.1`. | **Pass (Fixed)** |
-| **FND-05:** Email PII in registration log & CRLF log injection | `[FAIL] CHK-08`: `pii_leaked=True`, `crlf_injected=True` (`FAKE_EVENT=1` new line). | Logged `user_id` instead of `email` on `REGISTER_SUCCESS`; added `_sanitize_log_value()` in `app/security.py`; added error/invalid-session logging. | Run `CHK-08`, `test_security_logs_omit_pii_and_neutralize_crlf`, and `test_csrf_rejection_and_invalid_session_are_logged`. | `[PASS] CHK-08`: `pii_leaked=False`, `crlf_injected=False`, `BAD_REQUEST` & `SESSION_INVALID` logged cleanly. | **Pass (Fixed)** |
-| **FND-06:** `/login` & `/register` omit `Cache-Control: no-store` | `[FAIL] CHK-09`: `Cache-Control=''` on `/login` and `/register`. | Added `_no_store_response()` helper in `app/routes.py` applying `no-store` headers across `/login`, `/register`, and `/dashboard`. | Run `CHK-09` & `test_auth_pages_prevent_caching`. | `[PASS] CHK-09`: Both routes return `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`. | **Pass (Fixed)** |
-| **FND-07:** `Bandit B105` on `TestingConfig.SECRET_KEY` | `bandit`: 1 Low warning on `app/config.py:61` (`exit=1`). | Replaced literal string with `secrets.token_hex(32)` in `TestingConfig`. | Re-run `bandit -r app run.py`. | `No issues identified` across 648 lines (`exit=0`). | **Pass (Resolved)** |
+Baseline and retest dependency versions, command outcomes, and scanner scope are recorded in `dependency-audit.txt`. The retest used Flask 3.1.3, Werkzeug 3.1.9, Flask-Limiter 3.10.1, Flask-WTF 1.2.2, python-dotenv 1.2.2, and pytest 9.0.3. Tool versions were pip-audit 2.10.1, Bandit 1.9.4, and ReportLab 5.1.2.
 
----
+## Finding-by-finding verification
 
-## 2. Functional Regression Check
+| Finding | Baseline evidence | Retest evidence | Status |
+|---|---|---|---|
+| FND-01 — dotenv/runtime configuration | `CHK-01` failed: dotenv values were not applied; default timeout remained 15 minutes. | `CHK-01` passed with expected key, secure-cookie setting, and 25-minute test timeout. Configuration boundary and invalid-input tests passed. | Fixed and verified |
+| FND-02 — session revocation | `CHK-06` failed: replayed pre-logout cookie received HTTP 200. | `CHK-06` passed: replay redirected to login. Tests confirmed stored nonce hashes, revocation, reauthentication, and expiry behavior. | Fixed and verified |
+| FND-03 — dependency advisories | 8 unique advisories across four packages (15 audit rows). | Updated pins; pip-audit returned “No known vulnerabilities found” for the Task 2 manifest and full Task 4 requirements. | Fixed and verified |
+| FND-04 — oversized login values | `CHK-07` called the verifier on a 50,000-character password and reflected an oversized email. The independent baseline harness observed 110.6 ms and its pytest check observed 112.6 ms. | `CHK-07` passed: verifier not called and oversized email not reflected. | Fixed and verified |
+| FND-05 — PII and log injection | Registration email appeared in logs; control characters forged log lines; selected security events were missing. | `CHK-08` passed: no PII leak or forged line. Tests verified registration redaction and structured CSRF/session events. | Fixed and verified |
+| FND-06 — cache controls | Login and registration responses lacked `no-store`. | `CHK-09` passed; login and registration responses include `Cache-Control` and `Pragma: no-cache`. | Fixed and verified |
+| FND-07 — B105 and local limiter | Bandit reported one low-severity, medium-confidence B105 warning on the literal test key. | Bandit reported no findings after test keys became random. The process-local `memory://` limiter remains an accepted single-process limitation. | Informational; B105 fixed and verified |
 
-Re-running Task 2's full 22-test suite (`tests/test_registration.py`, `tests/test_login.py`, `tests/test_rate_limiting.py`, `tests/test_sessions.py`, `tests/test_security.py`) after all remediations yielded **22 passed in 10.19s** with **0 failures** and **0 errors**, confirming existing registration, login, rate-limiting, session-expiration, and logout behaviors remain fully intact.
+## Interpretation and limitations
+
+- Baseline timings are single-run environment-specific observations, not performance guarantees or a benchmark. Retest success is measured by no password-verifier call and no oversized email reflection, not by elapsed time.
+- The final audit result reflects the manifests and environment on the retest date; it is not a guarantee against future advisories.
+- The `memory://` rate-limit store is not shared across worker processes. Configure a shared backend such as Redis before multi-worker deployment.
+- The original submitted baseline log is retained in `baseline-test-results.txt`; it is clearly separated from the independently reproduced baseline for this checkout.
